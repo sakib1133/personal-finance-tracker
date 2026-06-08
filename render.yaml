@@ -1,20 +1,18 @@
 services:
+  - type: web
+    name: expense-tracker
+    env: node
+    plan: free
 
-* type: web
-  name: expense-tracker
-  env: node
-  plan: free
+    buildCommand: cd server && npm install && npm run build
+    startCommand: cd server && npm start
 
-  buildCommand: cd server && npm install && npm run build
-  startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
 
-  envVars:
+      - key: PORT
+        value: "10000"
 
-  * key: NODE_ENV
-    value: production
-
-  * key: PORT
-    value: 10000
-
-  * key: JWT_SECRET
-    generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
