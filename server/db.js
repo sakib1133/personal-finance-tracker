@@ -2,7 +2,10 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs').promises;
 
-const DB_PATH = path.join(__dirname, 'expense_tracker.db');
+// Use persistent disk path on Render, local path for development
+const DB_PATH = process.env.RENDER ? 
+  path.join('/opt/render/project/data', 'expense_tracker.db') : 
+  path.join(__dirname, 'expense_tracker.db');
 
 let db;
 

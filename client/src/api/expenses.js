@@ -1,30 +1,21 @@
-import axios from 'axios';
-
-const API_URL = 'http://localhost:5001/expenses';
-
-const getAuthHeader = () => {
-  const token = localStorage.getItem('token');
-  return {
-    Authorization: `Bearer ${token}`
-  };
-};
+import api from './index';
 
 export const getExpenses = async () => {
-  const response = await axios.get(API_URL, { headers: getAuthHeader() });
+  const response = await api.get('/expenses');
   return response.data;
 };
 
 export const createExpense = async (expense) => {
-  const response = await axios.post(API_URL, expense, { headers: getAuthHeader() });
+  const response = await api.post('/expenses', expense);
   return response.data;
 };
 
 export const updateExpense = async (id, expense) => {
-  const response = await axios.put(`${API_URL}/${id}`, expense, { headers: getAuthHeader() });
+  const response = await api.put(`/expenses/${id}`, expense);
   return response.data;
 };
 
 export const deleteExpense = async (id) => {
-  const response = await axios.delete(`${API_URL}/${id}`, { headers: getAuthHeader() });
+  const response = await api.delete(`/expenses/${id}`);
   return response.data;
 };

@@ -1,30 +1,21 @@
-import axios from 'axios';
-
-const API_URL = 'http://localhost:5001/analytics';
-
-const getAuthHeader = () => {
-  const token = localStorage.getItem('token');
-  return {
-    Authorization: `Bearer ${token}`
-  };
-};
+import api from './index';
 
 export const getAnalyticsSummary = async () => {
-  const response = await axios.get(`${API_URL}/summary`, { headers: getAuthHeader() });
+  const response = await api.get('/analytics/summary');
   return response.data;
 };
 
 export const getMonthlyTrends = async () => {
-  const response = await axios.get(`${API_URL}/monthly-trends`, { headers: getAuthHeader() });
+  const response = await api.get('/analytics/monthly-trends');
   return response.data;
 };
 
 export const getCategoryBreakdown = async () => {
-  const response = await axios.get(`${API_URL}/category-breakdown`, { headers: getAuthHeader() });
+  const response = await api.get('/analytics/category-breakdown');
   return response.data;
 };
 
 export const getDailySpending = async () => {
-  const response = await axios.get(`${API_URL}/daily-spending`, { headers: getAuthHeader() });
+  const response = await api.get('/analytics/daily-spending');
   return response.data;
 };

@@ -1,20 +1,42 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getDb, initDatabase, migrateFromJSON } = require('./db');
 
+// Load environment variables
+require('dotenv').config();
+
 const app = express();
-const PORT = 5001;
-const JWT_SECRET = 'your-secret-key-change-this-in-production';
+const PORT = process.env.PORT || 5001;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Security: Validate JWT_SECRET in production
+if (NODE_ENV === 'production' && JWT_SECRET === 'your-secret-key-change-this-in-production') {
+  console.error('ERROR: JWT_SECRET must be set in production environment');
+  process.exit(1);
+}
 
 app.use(cors());
 app.use(express.json());
 
+// Serve static files from React build in production
+if (NODE_ENV === 'production') {
+  const clientBuildPath = path.join(__dirname, '../client/dist');
+  app.use(express.static(clientBuildPath));
+  console.log('Serving static files from:', clientBuildPath);
+}
+
 // GET / - Root route
 app.get('/', (req, res) => {
-  res.send('Expense Tracker API is running');
+  if (NODE_ENV === 'production') {
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  } else {
+    res.send('Expense Tracker API is running');
+  }
 });
 
 // JWT Authentication Middleware
@@ -785,11 +807,30 @@ app.get('/analytics/daily-spending', authenticateToken, (req, res) => {
   }
 });
 
+// SPA Fallback: Serve React app for all non-API routes in production
+if (NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    // Don't fallback for API routes
+    if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path.startsWith('/expenses') || req.path.startsWith('/budgets') || req.path.startsWith('/analytics')) {
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  });
+}
+
 // Initialize and start server
+console.log(`Starting server in ${NODE_ENV} mode...`);
+console.log(`Port: ${PORT}`);
+
 initDatabase().then(() => {
+  console.log('Database initialized successfully');
   migrateFromJSON().then(() => {
+    console.log('Data migration completed');
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
+      if (NODE_ENV === 'production') {
+        console.log('Production mode: Serving React build files');
+      }
     });
   }).catch(err => {
     console.error('Migration error:', err);
