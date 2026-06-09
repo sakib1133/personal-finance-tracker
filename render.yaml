@@ -3,6 +3,7 @@ services:
     name: expense-tracker
     env: node
     plan: free
+    runtime: "20"
 
     buildCommand: cd server && npm install && npm run build
     startCommand: cd server && npm start

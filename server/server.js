@@ -85,39 +85,27 @@ app.post('/auth/register', async (req, res) => {
     const createdAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
     // Check if email already exists
-    db.get('SELECT id FROM users WHERE email = ?', [email], async (err, row) => {
-      if (err) {
-        console.error('Registration error:', err);
-        return res.status(500).json({ error: 'Failed to register user' });
+    const row = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    
+    if (row) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    // Insert new user
+    db.prepare(
+      'INSERT INTO users (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(userId, fullName, email, hashedPassword, createdAt);
+
+    const token = jwt.sign({ id: userId, email, fullName }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: {
+        id: userId,
+        fullName,
+        email
       }
-      
-      if (row) {
-        return res.status(400).json({ error: 'Email already registered' });
-      }
-
-      // Insert new user
-      db.run(
-        'INSERT INTO users (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)',
-        [userId, fullName, email, hashedPassword, createdAt],
-        function(err) {
-          if (err) {
-            console.error('Registration error:', err);
-            return res.status(500).json({ error: 'Failed to register user' });
-          }
-
-          const token = jwt.sign({ id: userId, email, fullName }, JWT_SECRET, { expiresIn: '7d' });
-
-          res.status(201).json({
-            message: 'User registered successfully',
-            token,
-            user: {
-              id: userId,
-              fullName,
-              email
-            }
-          });
-        }
-      );
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -136,32 +124,27 @@ app.post('/auth/login', async (req, res) => {
 
     const db = getDb();
     
-    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
-      if (err) {
-        console.error('Login error:', err);
-        return res.status(500).json({ error: 'Failed to login' });
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ id: user.id, email: user.email, fullName: user.name }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.id,
+        fullName: user.name,
+        email: user.email
       }
-
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-
-      const validPassword = await bcrypt.compare(password, user.password);
-      if (!validPassword) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-
-      const token = jwt.sign({ id: user.id, email: user.email, fullName: user.name }, JWT_SECRET, { expiresIn: '7d' });
-
-      res.json({
-        message: 'Login successful',
-        token,
-        user: {
-          id: user.id,
-          fullName: user.name,
-          email: user.email
-        }
-      });
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -174,21 +157,16 @@ app.get('/auth/me', authenticateToken, (req, res) => {
   try {
     const db = getDb();
     
-    db.get('SELECT id, name, email FROM users WHERE id = ?', [req.user.id], (err, user) => {
-      if (err) {
-        console.error('Get user error:', err);
-        return res.status(500).json({ error: 'Failed to get user' });
-      }
+    const user = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.user.id);
 
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-      res.json({
-        id: user.id,
-        fullName: user.name,
-        email: user.email
-      });
+    res.json({
+      id: user.id,
+      fullName: user.name,
+      email: user.email
     });
   } catch (error) {
     console.error('Get user error:', error);
@@ -201,14 +179,9 @@ app.get('/expenses', authenticateToken, (req, res) => {
   try {
     const db = getDb();
     
-    db.all('SELECT * FROM expenses WHERE user_id = ?', [req.user.id], (err, expenses) => {
-      if (err) {
-        console.error('Failed to read expenses:', err);
-        return res.status(500).json({ error: 'Failed to read expenses' });
-      }
-      
-      res.json(expenses);
-    });
+    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
+    
+    res.json(expenses);
   } catch (error) {
     res.status(500).json({ error: 'Failed to read expenses' });
   }
@@ -227,24 +200,13 @@ app.post('/expenses', authenticateToken, (req, res) => {
     const expenseId = uuidv4();
     const createdAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-    db.run(
-      'INSERT INTO expenses (id, user_id, amount, category, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [expenseId, req.user.id, parseFloat(amount), category, date, note || '', createdAt],
-      function(err) {
-        if (err) {
-          console.error('Failed to create expense:', err);
-          return res.status(500).json({ error: 'Failed to create expense' });
-        }
+    db.prepare(
+      'INSERT INTO expenses (id, user_id, amount, category, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(expenseId, req.user.id, parseFloat(amount), category, date, note || '', createdAt);
 
-        db.get('SELECT * FROM expenses WHERE id = ?', [expenseId], (err, expense) => {
-          if (err) {
-            console.error('Failed to retrieve expense:', err);
-            return res.status(500).json({ error: 'Failed to create expense' });
-          }
-          res.status(201).json(expense);
-        });
-      }
-    );
+    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(expenseId);
+    
+    res.status(201).json(expense);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create expense' });
   }
@@ -259,66 +221,50 @@ app.put('/expenses/:id', authenticateToken, (req, res) => {
     const db = getDb();
 
     // First check if expense exists and belongs to user
-    db.get('SELECT * FROM expenses WHERE id = ?', [id], (err, expense) => {
-      if (err) {
-        console.error('Failed to update expense:', err);
-        return res.status(500).json({ error: 'Failed to update expense' });
-      }
+    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
 
-      if (!expense) {
-        return res.status(404).json({ error: 'Expense not found' });
-      }
+    if (!expense) {
+      return res.status(404).json({ error: 'Expense not found' });
+    }
 
-      if (expense.user_id !== req.user.id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
+    if (expense.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
-      // Build update query dynamically based on provided fields
-      const updates = [];
-      const values = [];
+    // Build update query dynamically based on provided fields
+    const updates = [];
+    const values = [];
 
-      if (amount !== undefined) {
-        updates.push('amount = ?');
-        values.push(parseFloat(amount));
-      }
-      if (category) {
-        updates.push('category = ?');
-        values.push(category);
-      }
-      if (date) {
-        updates.push('date = ?');
-        values.push(date);
-      }
-      if (note !== undefined) {
-        updates.push('note = ?');
-        values.push(note);
-      }
+    if (amount !== undefined) {
+      updates.push('amount = ?');
+      values.push(parseFloat(amount));
+    }
+    if (category) {
+      updates.push('category = ?');
+      values.push(category);
+    }
+    if (date) {
+      updates.push('date = ?');
+      values.push(date);
+    }
+    if (note !== undefined) {
+      updates.push('note = ?');
+      values.push(note);
+    }
 
-      if (updates.length === 0) {
-        return res.json(expense);
-      }
+    if (updates.length === 0) {
+      return res.json(expense);
+    }
 
-      values.push(id);
+    values.push(id);
 
-      db.run(
-        `UPDATE expenses SET ${updates.join(', ')} WHERE id = ?`,
-        values,
-        function(err) {
-          if (err) {
-            console.error('Failed to update expense:', err);
-            return res.status(500).json({ error: 'Failed to update expense' });
-          }
+    db.prepare(
+      `UPDATE expenses SET ${updates.join(', ')} WHERE id = ?`
+    ).run(values);
 
-          db.get('SELECT * FROM expenses WHERE id = ?', [id], (err, updatedExpense) => {
-            if (err) {
-              console.error('Failed to retrieve updated expense:', err);
-              return res.status(500).json({ error: 'Failed to update expense' });
-            }
-            res.json(updatedExpense);
-          });
-        }
-      );
-    });
+    const updatedExpense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+    
+    res.json(updatedExpense);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update expense' });
   }
@@ -331,28 +277,19 @@ app.delete('/expenses/:id', authenticateToken, (req, res) => {
     const db = getDb();
 
     // First check if expense exists and belongs to user
-    db.get('SELECT * FROM expenses WHERE id = ?', [id], (err, expense) => {
-      if (err) {
-        console.error('Failed to delete expense:', err);
-        return res.status(500).json({ error: 'Failed to delete expense' });
-      }
+    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
 
-      if (!expense) {
-        return res.status(404).json({ error: 'Expense not found' });
-      }
+    if (!expense) {
+      return res.status(404).json({ error: 'Expense not found' });
+    }
 
-      if (expense.user_id !== req.user.id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
+    if (expense.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
-      db.run('DELETE FROM expenses WHERE id = ?', [id], function(err) {
-        if (err) {
-          console.error('Failed to delete expense:', err);
-          return res.status(500).json({ error: 'Failed to delete expense' });
-        }
-        res.json({ message: 'Expense deleted successfully' });
-      });
-    });
+    db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
+    
+    res.json({ message: 'Expense deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete expense' });
   }
@@ -363,24 +300,19 @@ app.get('/budgets', authenticateToken, (req, res) => {
   try {
     const db = getDb();
     
-    db.all('SELECT * FROM budgets WHERE user_id = ?', [req.user.id], (err, budgets) => {
-      if (err) {
-        console.error('Failed to read budgets:', err);
-        return res.status(500).json({ error: 'Failed to read budgets' });
-      }
-      
-      // Transform to match expected format
-      const transformedBudgets = budgets.map(b => ({
-        id: b.id,
-        userId: b.user_id,
-        category: b.category,
-        monthlyBudget: b.monthly_budget,
-        createdAt: b.created_at,
-        updatedAt: b.updated_at
-      }));
-      
-      res.json(transformedBudgets);
-    });
+    const budgets = db.prepare('SELECT * FROM budgets WHERE user_id = ?').all(req.user.id);
+    
+    // Transform to match expected format
+    const transformedBudgets = budgets.map(b => ({
+      id: b.id,
+      userId: b.user_id,
+      category: b.category,
+      monthlyBudget: b.monthly_budget,
+      createdAt: b.created_at,
+      updatedAt: b.updated_at
+    }));
+    
+    res.json(transformedBudgets);
   } catch (error) {
     res.status(500).json({ error: 'Failed to read budgets' });
   }
@@ -409,49 +341,30 @@ app.post('/budgets', authenticateToken, (req, res) => {
     const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
     // Check if budget already exists for this category
-    db.get(
-      'SELECT id FROM budgets WHERE user_id = ? AND category = ?',
-      [req.user.id, category],
-      (err, existingBudget) => {
-        if (err) {
-          console.error('Failed to create budget:', err);
-          return res.status(500).json({ error: 'Failed to create budget' });
-        }
+    const existingBudget = db.prepare(
+      'SELECT id FROM budgets WHERE user_id = ? AND category = ?'
+    ).get(req.user.id, category);
 
-        if (existingBudget) {
-          return res.status(400).json({ error: 'Budget already exists for this category' });
-        }
+    if (existingBudget) {
+      return res.status(400).json({ error: 'Budget already exists for this category' });
+    }
 
-        db.run(
-          'INSERT INTO budgets (id, user_id, category, monthly_budget, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [budgetId, req.user.id, category, parseFloat(monthlyBudget), now, now],
-          function(err) {
-            if (err) {
-              console.error('Failed to create budget:', err);
-              return res.status(500).json({ error: 'Failed to create budget' });
-            }
+    db.prepare(
+      'INSERT INTO budgets (id, user_id, category, monthly_budget, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(budgetId, req.user.id, category, parseFloat(monthlyBudget), now, now);
 
-            db.get('SELECT * FROM budgets WHERE id = ?', [budgetId], (err, budget) => {
-              if (err) {
-                console.error('Failed to retrieve budget:', err);
-                return res.status(500).json({ error: 'Failed to create budget' });
-              }
+    const budget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(budgetId);
 
-              const transformedBudget = {
-                id: budget.id,
-                userId: budget.user_id,
-                category: budget.category,
-                monthlyBudget: budget.monthly_budget,
-                createdAt: budget.created_at,
-                updatedAt: budget.updated_at
-              };
+    const transformedBudget = {
+      id: budget.id,
+      userId: budget.user_id,
+      category: budget.category,
+      monthlyBudget: budget.monthly_budget,
+      createdAt: budget.created_at,
+      updatedAt: budget.updated_at
+    };
 
-              res.status(201).json(transformedBudget);
-            });
-          }
-        );
-      }
-    );
+    res.status(201).json(transformedBudget);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create budget' });
   }
@@ -466,100 +379,70 @@ app.put('/budgets/:id', authenticateToken, (req, res) => {
     const db = getDb();
 
     // First check if budget exists and belongs to user
-    db.get('SELECT * FROM budgets WHERE id = ?', [id], (err, budget) => {
-      if (err) {
-        console.error('Failed to update budget:', err);
-        return res.status(500).json({ error: 'Failed to update budget' });
+    const budget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(id);
+
+    if (!budget) {
+      return res.status(404).json({ error: 'Budget not found' });
+    }
+
+    if (budget.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    if (category) {
+      const validCategories = ['Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
+      if (!validCategories.includes(category)) {
+        return res.status(400).json({ error: 'Invalid category' });
       }
 
-      if (!budget) {
-        return res.status(404).json({ error: 'Budget not found' });
+      // Check if category is already used by another budget
+      const existingBudget = db.prepare(
+        'SELECT id FROM budgets WHERE user_id = ? AND category = ? AND id != ?'
+      ).get(req.user.id, category, id);
+
+      if (existingBudget) {
+        return res.status(400).json({ error: 'Budget already exists for this category' });
       }
+    }
 
-      if (budget.user_id !== req.user.id) {
-        return res.status(403).json({ error: 'Access denied' });
+    if (monthlyBudget !== undefined) {
+      if (isNaN(monthlyBudget) || monthlyBudget <= 0) {
+        return res.status(400).json({ error: 'Monthly budget must be a positive number' });
       }
+    }
 
-      if (category) {
-        const validCategories = ['Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
-        if (!validCategories.includes(category)) {
-          return res.status(400).json({ error: 'Invalid category' });
-        }
+    const updates = [];
+    const values = [];
 
-        // Check if category is already used by another budget
-        db.get(
-          'SELECT id FROM budgets WHERE user_id = ? AND category = ? AND id != ?',
-          [req.user.id, category, id],
-          (err, existingBudget) => {
-            if (err) {
-              console.error('Failed to update budget:', err);
-              return res.status(500).json({ error: 'Failed to update budget' });
-            }
+    if (category) {
+      updates.push('category = ?');
+      values.push(category);
+    }
+    if (monthlyBudget !== undefined) {
+      updates.push('monthly_budget = ?');
+      values.push(parseFloat(monthlyBudget));
+    }
+    updates.push('updated_at = ?');
+    values.push(new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }));
 
-            if (existingBudget) {
-              return res.status(400).json({ error: 'Budget already exists for this category' });
-            }
+    values.push(id);
 
-            updateBudget();
-          }
-        );
-      } else {
-        updateBudget();
-      }
+    db.prepare(
+      `UPDATE budgets SET ${updates.join(', ')} WHERE id = ?`
+    ).run(values);
 
-      function updateBudget() {
-        if (monthlyBudget !== undefined) {
-          if (isNaN(monthlyBudget) || monthlyBudget <= 0) {
-            return res.status(400).json({ error: 'Monthly budget must be a positive number' });
-          }
-        }
+    const updatedBudget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(id);
 
-        const updates = [];
-        const values = [];
+    const transformedBudget = {
+      id: updatedBudget.id,
+      userId: updatedBudget.user_id,
+      category: updatedBudget.category,
+      monthlyBudget: updatedBudget.monthly_budget,
+      createdAt: updatedBudget.created_at,
+      updatedAt: updatedBudget.updated_at
+    };
 
-        if (category) {
-          updates.push('category = ?');
-          values.push(category);
-        }
-        if (monthlyBudget !== undefined) {
-          updates.push('monthly_budget = ?');
-          values.push(parseFloat(monthlyBudget));
-        }
-        updates.push('updated_at = ?');
-        values.push(new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }));
-
-        values.push(id);
-
-        db.run(
-          `UPDATE budgets SET ${updates.join(', ')} WHERE id = ?`,
-          values,
-          function(err) {
-            if (err) {
-              console.error('Failed to update budget:', err);
-              return res.status(500).json({ error: 'Failed to update budget' });
-            }
-
-            db.get('SELECT * FROM budgets WHERE id = ?', [id], (err, updatedBudget) => {
-              if (err) {
-                console.error('Failed to retrieve updated budget:', err);
-                return res.status(500).json({ error: 'Failed to update budget' });
-              }
-
-              const transformedBudget = {
-                id: updatedBudget.id,
-                userId: updatedBudget.user_id,
-                category: updatedBudget.category,
-                monthlyBudget: updatedBudget.monthly_budget,
-                createdAt: updatedBudget.created_at,
-                updatedAt: updatedBudget.updated_at
-              };
-
-              res.json(transformedBudget);
-            });
-          }
-        );
-      }
-    });
+    res.json(transformedBudget);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update budget' });
   }
@@ -572,28 +455,19 @@ app.delete('/budgets/:id', authenticateToken, (req, res) => {
     const db = getDb();
 
     // First check if budget exists and belongs to user
-    db.get('SELECT * FROM budgets WHERE id = ?', [id], (err, budget) => {
-      if (err) {
-        console.error('Failed to delete budget:', err);
-        return res.status(500).json({ error: 'Failed to delete budget' });
-      }
+    const budget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(id);
 
-      if (!budget) {
-        return res.status(404).json({ error: 'Budget not found' });
-      }
+    if (!budget) {
+      return res.status(404).json({ error: 'Budget not found' });
+    }
 
-      if (budget.user_id !== req.user.id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
+    if (budget.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
-      db.run('DELETE FROM budgets WHERE id = ?', [id], function(err) {
-        if (err) {
-          console.error('Failed to delete budget:', err);
-          return res.status(500).json({ error: 'Failed to delete budget' });
-        }
-        res.json({ message: 'Budget deleted successfully' });
-      });
-    });
+    db.prepare('DELETE FROM budgets WHERE id = ?').run(id);
+    
+    res.json({ message: 'Budget deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete budget' });
   }
@@ -606,62 +480,57 @@ app.get('/analytics/summary', authenticateToken, (req, res) => {
   try {
     const db = getDb();
     
-    db.all('SELECT * FROM expenses WHERE user_id = ?', [req.user.id], (err, expenses) => {
-      if (err) {
-        console.error('Analytics summary error:', err);
-        return res.status(500).json({ error: 'Failed to get analytics summary' });
-      }
+    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
 
-      if (expenses.length === 0) {
-        return res.json({
-          totalExpenses: 0,
-          averageExpenseAmount: 0,
-          highestSingleExpense: 0,
-          lowestExpense: 0,
-          mostUsedCategory: 'N/A',
-          currentMonthSpending: 0,
-          previousMonthSpending: 0
-        });
-      }
-
-      const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-      const averageExpenseAmount = totalExpenses / expenses.length;
-      const highestSingleExpense = Math.max(...expenses.map(exp => exp.amount));
-      const lowestExpense = Math.min(...expenses.map(exp => exp.amount));
-
-      const categoryCount = {};
-      expenses.forEach(exp => {
-        categoryCount[exp.category] = (categoryCount[exp.category] || 0) + 1;
+    if (expenses.length === 0) {
+      return res.json({
+        totalExpenses: 0,
+        averageExpenseAmount: 0,
+        highestSingleExpense: 0,
+        lowestExpense: 0,
+        mostUsedCategory: 'N/A',
+        currentMonthSpending: 0,
+        previousMonthSpending: 0
       });
-      const mostUsedCategory = Object.entries(categoryCount).sort((a, b) => b[1] - a[1])[0][0];
+    }
 
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-      const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-      const previousMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const averageExpenseAmount = totalExpenses / expenses.length;
+    const highestSingleExpense = Math.max(...expenses.map(exp => exp.amount));
+    const lowestExpense = Math.min(...expenses.map(exp => exp.amount));
 
-      const currentMonthExpenses = expenses.filter(exp => {
-        const expDate = new Date(exp.date);
-        return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-      });
-      const currentMonthSpending = currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const categoryCount = {};
+    expenses.forEach(exp => {
+      categoryCount[exp.category] = (categoryCount[exp.category] || 0) + 1;
+    });
+    const mostUsedCategory = Object.entries(categoryCount).sort((a, b) => b[1] - a[1])[0][0];
 
-      const previousMonthExpenses = expenses.filter(exp => {
-        const expDate = new Date(exp.date);
-        return expDate.getMonth() === previousMonth && expDate.getFullYear() === previousMonthYear;
-      });
-      const previousMonthSpending = previousMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const previousMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-      res.json({
-        totalExpenses,
-        averageExpenseAmount: parseFloat(averageExpenseAmount.toFixed(2)),
-        highestSingleExpense,
-        lowestExpense,
-        mostUsedCategory,
-        currentMonthSpending,
-        previousMonthSpending
-      });
+    const currentMonthExpenses = expenses.filter(exp => {
+      const expDate = new Date(exp.date);
+      return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
+    });
+    const currentMonthSpending = currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+    const previousMonthExpenses = expenses.filter(exp => {
+      const expDate = new Date(exp.date);
+      return expDate.getMonth() === previousMonth && expDate.getFullYear() === previousMonthYear;
+    });
+    const previousMonthSpending = previousMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+    res.json({
+      totalExpenses,
+      averageExpenseAmount: parseFloat(averageExpenseAmount.toFixed(2)),
+      highestSingleExpense,
+      lowestExpense,
+      mostUsedCategory,
+      currentMonthSpending,
+      previousMonthSpending
     });
   } catch (error) {
     console.error('Analytics summary error:', error);
@@ -674,35 +543,30 @@ app.get('/analytics/monthly-trends', authenticateToken, (req, res) => {
   try {
     const db = getDb();
     
-    db.all('SELECT * FROM expenses WHERE user_id = ?', [req.user.id], (err, expenses) => {
-      if (err) {
-        console.error('Monthly trends error:', err);
-        return res.status(500).json({ error: 'Failed to get monthly trends' });
-      }
+    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
 
-      const months = [];
-      const now = new Date();
+    const months = [];
+    const now = new Date();
+    
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const month = date.getMonth();
+      const year = date.getFullYear();
       
-      for (let i = 11; i >= 0; i--) {
-        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const month = date.getMonth();
-        const year = date.getFullYear();
-        
-        const monthExpenses = expenses.filter(exp => {
-          const expDate = new Date(exp.date);
-          return expDate.getMonth() === month && expDate.getFullYear() === year;
-        });
-        
-        const totalSpending = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-        
-        months.push({
-          month: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
-          totalSpending
-        });
-      }
+      const monthExpenses = expenses.filter(exp => {
+        const expDate = new Date(exp.date);
+        return expDate.getMonth() === month && expDate.getFullYear() === year;
+      });
+      
+      const totalSpending = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+      
+      months.push({
+        month: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
+        totalSpending
+      });
+    }
 
-      res.json(months);
-    });
+    res.json(months);
   } catch (error) {
     console.error('Monthly trends error:', error);
     res.status(500).json({ error: 'Failed to get monthly trends' });
@@ -714,34 +578,29 @@ app.get('/analytics/category-breakdown', authenticateToken, (req, res) => {
   try {
     const db = getDb();
     
-    db.all('SELECT * FROM expenses WHERE user_id = ?', [req.user.id], (err, expenses) => {
-      if (err) {
-        console.error('Category breakdown error:', err);
-        return res.status(500).json({ error: 'Failed to get category breakdown' });
+    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
+
+    if (expenses.length === 0) {
+      return res.json([]);
+    }
+
+    const categorySpending = {};
+    expenses.forEach(exp => {
+      if (!categorySpending[exp.category]) {
+        categorySpending[exp.category] = 0;
       }
-
-      if (expenses.length === 0) {
-        return res.json([]);
-      }
-
-      const categorySpending = {};
-      expenses.forEach(exp => {
-        if (!categorySpending[exp.category]) {
-          categorySpending[exp.category] = 0;
-        }
-        categorySpending[exp.category] += exp.amount;
-      });
-
-      const totalSpending = Object.values(categorySpending).reduce((sum, amount) => sum + amount, 0);
-
-      const breakdown = Object.entries(categorySpending).map(([category, amount]) => ({
-        category,
-        amount,
-        percentage: parseFloat(((amount / totalSpending) * 100).toFixed(2))
-      })).sort((a, b) => b.amount - a.amount);
-
-      res.json(breakdown);
+      categorySpending[exp.category] += exp.amount;
     });
+
+    const totalSpending = Object.values(categorySpending).reduce((sum, amount) => sum + amount, 0);
+
+    const breakdown = Object.entries(categorySpending).map(([category, amount]) => ({
+      category,
+      amount,
+      percentage: parseFloat(((amount / totalSpending) * 100).toFixed(2))
+    })).sort((a, b) => b.amount - a.amount);
+
+    res.json(breakdown);
   } catch (error) {
     console.error('Category breakdown error:', error);
     res.status(500).json({ error: 'Failed to get category breakdown' });
@@ -753,53 +612,48 @@ app.get('/analytics/daily-spending', authenticateToken, (req, res) => {
   try {
     const db = getDb();
     
-    db.all('SELECT * FROM expenses WHERE user_id = ?', [req.user.id], (err, expenses) => {
-      if (err) {
-        console.error('Daily spending error:', err);
-        return res.status(500).json({ error: 'Failed to get daily spending' });
+    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const currentMonthExpenses = expenses.filter(exp => {
+      const expDate = new Date(exp.date);
+      return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
+    });
+
+    const dailySpending = {};
+    currentMonthExpenses.forEach(exp => {
+      const expDate = new Date(exp.date);
+      const day = expDate.getDate();
+      if (!dailySpending[day]) {
+        dailySpending[day] = 0;
       }
+      dailySpending[day] += exp.amount;
+    });
 
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const dailyData = [];
 
-      const currentMonthExpenses = expenses.filter(exp => {
-        const expDate = new Date(exp.date);
-        return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
+    for (let day = 1; day <= daysInMonth; day++) {
+      dailyData.push({
+        day: `Day ${day}`,
+        amount: dailySpending[day] || 0
       });
+    }
 
-      const dailySpending = {};
-      currentMonthExpenses.forEach(exp => {
-        const expDate = new Date(exp.date);
-        const day = expDate.getDate();
-        if (!dailySpending[day]) {
-          dailySpending[day] = 0;
-        }
-        dailySpending[day] += exp.amount;
-      });
+    const highestSpendingDay = dailyData.reduce((max, day) => 
+      day.amount > max.amount ? day : max, { day: 'N/A', amount: 0 });
 
-      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-      const dailyData = [];
+    const averageDailySpending = currentMonthExpenses.length > 0 
+      ? currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0) / daysInMonth 
+      : 0;
 
-      for (let day = 1; day <= daysInMonth; day++) {
-        dailyData.push({
-          day: `Day ${day}`,
-          amount: dailySpending[day] || 0
-        });
-      }
-
-      const highestSpendingDay = dailyData.reduce((max, day) => 
-        day.amount > max.amount ? day : max, { day: 'N/A', amount: 0 });
-
-      const averageDailySpending = currentMonthExpenses.length > 0 
-        ? currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0) / daysInMonth 
-        : 0;
-
-      res.json({
-        dailyData,
-        highestSpendingDay,
-        averageDailySpending: parseFloat(averageDailySpending.toFixed(2))
-      });
+    res.json({
+      dailyData,
+      highestSpendingDay,
+      averageDailySpending: parseFloat(averageDailySpending.toFixed(2))
     });
   } catch (error) {
     console.error('Daily spending error:', error);
@@ -822,23 +676,20 @@ if (NODE_ENV === 'production') {
 console.log(`Starting server in ${NODE_ENV} mode...`);
 console.log(`Port: ${PORT}`);
 
-initDatabase().then(() => {
-  console.log('Database initialized successfully');
-  migrateFromJSON().then(() => {
-    console.log('Data migration completed');
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-      if (NODE_ENV === 'production') {
-        console.log('Production mode: Serving React build files');
-      }
-    });
-  }).catch(err => {
-    console.error('Migration error:', err);
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+initDatabase();
+console.log('Database initialized successfully');
+
+migrateFromJSON().then(() => {
+  console.log('Data migration completed');
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    if (NODE_ENV === 'production') {
+      console.log('Production mode: Serving React build files');
+    }
   });
 }).catch(err => {
-  console.error('Database initialization error:', err);
-  process.exit(1);
+  console.error('Migration error:', err);
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 });

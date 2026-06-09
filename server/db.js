@@ -1,117 +1,74 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs').promises;
 
 // Use persistent disk path on Render, local path for development
 const DB_PATH = path.join(__dirname, 'expense_tracker.db');
-let db;
+let db = null;
 
-// Get database connection
+// Get database connection (singleton pattern)
 function getDb() {
   if (!db) {
-    db = new sqlite3.Database(DB_PATH, (err) => {
-      if (err) {
-        console.error('Error opening database:', err.message);
-      } else {
-        console.log('Connected to SQLite database');
-      }
-    });
+    db = new Database(DB_PATH);
+    console.log('Connected to SQLite database');
   }
   return db;
 }
 
 // Initialize database schema
-async function initDatabase() {
-  return new Promise((resolve, reject) => {
-    const database = getDb();
-    
-    database.serialize(() => {
-      // Create users table
-      database.run(`
-        CREATE TABLE IF NOT EXISTS users (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          email TEXT UNIQUE NOT NULL,
-          password TEXT NOT NULL,
-          created_at TEXT NOT NULL
-        )
-      `, (err) => {
-        if (err) {
-          console.error('Error creating users table:', err.message);
-          reject(err);
-          return;
-        }
-      });
+function initDatabase() {
+  const database = getDb();
+  
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `);
 
-      // Create expenses table
-      database.run(`
-        CREATE TABLE IF NOT EXISTS expenses (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          amount REAL NOT NULL,
-          category TEXT NOT NULL,
-          date TEXT NOT NULL,
-          note TEXT,
-          created_at TEXT NOT NULL,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        )
-      `, (err) => {
-        if (err) {
-          console.error('Error creating expenses table:', err.message);
-          reject(err);
-          return;
-        }
-      });
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      category TEXT NOT NULL,
+      date TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
 
-      // Create budgets table
-      database.run(`
-        CREATE TABLE IF NOT EXISTS budgets (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          category TEXT NOT NULL,
-          monthly_budget REAL NOT NULL,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-          UNIQUE(user_id, category)
-        )
-      `, (err) => {
-        if (err) {
-          console.error('Error creating budgets table:', err.message);
-          reject(err);
-          return;
-        }
-      });
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS budgets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      monthly_budget REAL NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, category)
+    )
+  `);
 
-      // Create indexes for better query performance
-      database.run(`
-        CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON expenses(user_id)
-      `, (err) => {
-        if (err) {
-          console.error('Error creating expenses user_id index:', err.message);
-        }
-      });
+  // Create indexes for better query performance
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON expenses(user_id)
+  `);
 
-      database.run(`
-        CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)
-      `, (err) => {
-        if (err) {
-          console.error('Error creating expenses date index:', err.message);
-        }
-      });
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date)
+  `);
 
-      database.run(`
-        CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON budgets(user_id)
-      `, (err) => {
-        if (err) {
-          console.error('Error creating budgets user_id index:', err.message);
-        }
-      });
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON budgets(user_id)
+  `);
 
-      console.log('Database schema initialized successfully');
-      resolve();
-    });
-  });
+  console.log('Database schema initialized successfully');
 }
 
 // Migrate data from JSON files to SQLite
@@ -159,17 +116,11 @@ async function migrateFromJSON() {
     // Migrate users
     if (users.length > 0) {
       console.log(`Migrating ${users.length} users...`);
+      const stmt = database.prepare(
+        `INSERT OR IGNORE INTO users (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)`
+      );
       for (const user of users) {
-        await new Promise((resolve, reject) => {
-          database.run(
-            `INSERT OR IGNORE INTO users (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)`,
-            [user.id, user.fullName, user.email, user.password, user.createdAt],
-            (err) => {
-              if (err) reject(err);
-              else resolve();
-            }
-          );
-        });
+        stmt.run(user.id, user.fullName, user.email, user.password, user.createdAt);
       }
       console.log('Users migration completed');
     }
@@ -177,17 +128,11 @@ async function migrateFromJSON() {
     // Migrate expenses
     if (expenses.length > 0) {
       console.log(`Migrating ${expenses.length} expenses...`);
+      const stmt = database.prepare(
+        `INSERT OR IGNORE INTO expenses (id, user_id, amount, category, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
       for (const expense of expenses) {
-        await new Promise((resolve, reject) => {
-          database.run(
-            `INSERT OR IGNORE INTO expenses (id, user_id, amount, category, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [expense.id, expense.userId, expense.amount, expense.category, expense.date, expense.note, expense.createdAt],
-            (err) => {
-              if (err) reject(err);
-              else resolve();
-            }
-          );
-        });
+        stmt.run(expense.id, expense.userId, expense.amount, expense.category, expense.date, expense.note, expense.createdAt);
       }
       console.log('Expenses migration completed');
     }
@@ -195,17 +140,11 @@ async function migrateFromJSON() {
     // Migrate budgets
     if (budgets.length > 0) {
       console.log(`Migrating ${budgets.length} budgets...`);
+      const stmt = database.prepare(
+        `INSERT OR IGNORE INTO budgets (id, user_id, category, monthly_budget, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`
+      );
       for (const budget of budgets) {
-        await new Promise((resolve, reject) => {
-          database.run(
-            `INSERT OR IGNORE INTO budgets (id, user_id, category, monthly_budget, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-            [budget.id, budget.userId, budget.category, budget.monthlyBudget, budget.createdAt, budget.updatedAt],
-            (err) => {
-              if (err) reject(err);
-              else resolve();
-            }
-          );
-        });
+        stmt.run(budget.id, budget.userId, budget.category, budget.monthlyBudget, budget.createdAt, budget.updatedAt);
       }
       console.log('Budgets migration completed');
     }
@@ -241,13 +180,9 @@ async function migrateFromJSON() {
 // Close database connection
 function closeDatabase() {
   if (db) {
-    db.close((err) => {
-      if (err) {
-        console.error('Error closing database:', err.message);
-      } else {
-        console.log('Database connection closed');
-      }
-    });
+    db.close();
+    console.log('Database connection closed');
+    db = null;
   }
 }
 
