@@ -27,6 +27,19 @@ export default function Analytics() {
 
   useEffect(() => {
     loadAnalyticsData();
+
+    // Re-fetch data when the page becomes visible (tab switch, PWA resume)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Analytics page became visible, refreshing data...');
+        loadAnalyticsData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const loadAnalyticsData = async () => {

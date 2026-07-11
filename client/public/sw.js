@@ -1,4 +1,4 @@
-const CACHE_NAME = 'expense-tracker-v5'; // Updated to force new install cycle
+const CACHE_NAME = 'expense-tracker-v6'; // Force fresh install, clears stale cache
 const urlsToCache = [
   '/',
   '/index.html',
@@ -32,43 +32,40 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Fetch event - network-first for API, cache-first for assets
+// Fetch event - network-only for API, network-first with cache for assets
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // API requests - NEVER cache, always fetch fresh
+  // API requests - NEVER cache, always fetch fresh (pass through, no SW interference)
   if (url.pathname.startsWith('/api/') || 
       url.pathname.startsWith('/expenses') ||
       url.pathname.startsWith('/budgets') ||
-      url.pathname.startsWith('/auth')) {
-    
-    // For GET requests, add timestamp to prevent browser caching
-    let fetchUrl = event.request.url;
-    if (event.request.method === 'GET') {
-      const urlObj = new URL(event.request.url);
-      urlObj.searchParams.set('_t', Date.now());
-      fetchUrl = urlObj.toString();
-    }
-    
-    const fetchRequest = new Request(fetchUrl, {
-      method: event.request.method,
-      headers: event.request.headers,
-      body: event.request.body,
-      credentials: 'include'
-    });
+      url.pathname.startsWith('/auth') ||
+      url.pathname.startsWith('/analytics')) {
     
     event.respondWith(
-      fetch(fetchRequest)
+      fetch(event.request)
         .then(response => {
-          // Return fresh response, never cache API calls
+          // Return a clone since the response can only be consumed once
           return response.clone();
         })
         .catch(() => {
-          // Offline fallback only for GET
+          // Only cache fallback for GET requests, return error for others
           if (event.request.method === 'GET') {
-            return caches.match(event.request);
+            // Check if we have a cached response (unlikely for API, but safe)
+            return caches.match(event.request).then(cached => {
+              if (cached) {
+                return cached;
+              }
+              return new Response(
+                JSON.stringify({ error: 'Network error - offline' }),
+                { 
+                  status: 503,
+                  headers: { 'Content-Type': 'application/json' }
+                }
+              );
+            });
           }
-          // For mutations, fail immediately (don't return stale data)
           return new Response(
             JSON.stringify({ error: 'Network error - offline' }),
             { 

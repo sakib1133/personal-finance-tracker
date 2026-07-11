@@ -17,6 +17,19 @@ export default function Budgets() {
 
   useEffect(() => {
     loadData();
+
+    // Re-fetch data when the page becomes visible (tab switch, PWA resume)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Budgets page became visible, refreshing data...');
+        loadData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const loadData = async () => {
