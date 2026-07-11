@@ -26,15 +26,28 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // API requests - network first, never cache
+  // API requests - network first with cache-busting
   if (url.pathname.startsWith('/api/') || 
       url.pathname.startsWith('/expenses') ||
       url.pathname.startsWith('/budgets') ||
       url.pathname.startsWith('/auth')) {
+    // Add cache-busting parameter to ensure fresh data
+    const bustedUrl = new URL(event.request.url);
+    bustedUrl.searchParams.set('_t', Date.now());
+    
+    const bustedRequest = new Request(bustedUrl, event.request);
+    
     event.respondWith(
-      fetch(event.request)
+      fetch(bustedRequest)
+        .then(response => {
+          // Don't cache API responses - always serve fresh
+          if (!response || response.status !== 200) {
+            return response;
+          }
+          return response;
+        })
         .catch(() => {
-          // If offline and it's a GET request, try cache
+          // If offline and it's a GET request, try cache as fallback only
           if (event.request.method === 'GET') {
             return caches.match(event.request);
           }

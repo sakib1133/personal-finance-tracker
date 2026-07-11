@@ -32,6 +32,23 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Disable caching for API routes - CRITICAL FIX for data freshness
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/') || 
+      req.path.startsWith('/expenses') ||
+      req.path.startsWith('/budgets') ||
+      req.path.startsWith('/auth')) {
+    // Prevent all browser and CDN caching for API responses
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate, private, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'ETag': 'false'
+    });
+  }
+  next();
+});
+
 // Serve static files from React build in production
 if (NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '../client/dist');
