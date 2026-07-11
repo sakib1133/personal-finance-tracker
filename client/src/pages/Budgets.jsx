@@ -6,6 +6,7 @@ import BudgetProgressCard from '../components/BudgetProgressCard';
 import BudgetAlert from '../components/BudgetAlert';
 import BudgetVsSpendingChart from '../components/BudgetVsSpendingChart';
 import Navbar from '../components/Navbar';
+import { useToast } from '../context/ToastContext';
 
 export default function Budgets() {
   const [budgets, setBudgets] = useState([]);
@@ -13,7 +14,7 @@ export default function Budgets() {
   const [editingBudget, setEditingBudget] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [notification, setNotification] = useState({ type: '', message: '' });
+  const { success, error: showError } = useToast();
 
   useEffect(() => {
     loadData();
@@ -39,7 +40,7 @@ export default function Budgets() {
       setExpenses(expensesData);
     } catch (error) {
       console.error('Error loading data:', error);
-      showNotification('error', 'Failed to load data');
+      showError('Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -88,10 +89,10 @@ export default function Budgets() {
       await createBudget(budgetData);
       await loadData();
       setShowForm(false);
-      showNotification('success', 'Budget added successfully');
+      success('Budget added successfully');
     } catch (error) {
       console.error('Error adding budget:', error);
-      showNotification('error', error.response?.data?.error || 'Failed to add budget');
+      showError(error.response?.data?.error || 'Failed to add budget');
     }
   };
 
@@ -101,10 +102,10 @@ export default function Budgets() {
       await loadData();
       setEditingBudget(null);
       setShowForm(false);
-      showNotification('success', 'Budget updated successfully');
+      success('Budget updated successfully');
     } catch (error) {
       console.error('Error updating budget:', error);
-      showNotification('error', error.response?.data?.error || 'Failed to update budget');
+      showError(error.response?.data?.error || 'Failed to update budget');
     }
   };
 
@@ -116,10 +117,10 @@ export default function Budgets() {
     try {
       await deleteBudget(id);
       await loadData();
-      showNotification('success', 'Budget deleted successfully');
+      success('Budget deleted successfully');
     } catch (error) {
       console.error('Error deleting budget:', error);
-      showNotification('error', 'Failed to delete budget');
+      showError('Failed to delete budget');
     }
   };
 
@@ -132,11 +133,6 @@ export default function Budgets() {
   const handleCancelEdit = () => {
     setEditingBudget(null);
     setShowForm(false);
-  };
-
-  const showNotification = (type, message) => {
-    setNotification({ type, message });
-    setTimeout(() => setNotification({ type: '', message: '' }), 3000);
   };
 
   const budgetsWithSpending = getBudgetWithSpending();
@@ -173,16 +169,6 @@ export default function Budgets() {
               </button>
             )}
           </div>
-
-          {notification.message && (
-            <div
-              className={`mb-4 p-4 rounded-md ${
-                notification.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}
-            >
-              {notification.message}
-            </div>
-          )}
 
           {showForm && (
             <BudgetForm

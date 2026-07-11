@@ -10,6 +10,7 @@ import ExportButton from '../components/ExportButton';
 import Navbar from '../components/Navbar';
 import BudgetOverview from '../components/BudgetOverview';
 import BudgetAlert from '../components/BudgetAlert';
+import { useToast } from '../context/ToastContext';
 
 export default function Dashboard() {
   const [expenses, setExpenses] = useState([]);
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const [budgets, setBudgets] = useState([]);
   const [editingExpense, setEditingExpense] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { success, error: showError } = useToast();
 
   useEffect(() => {
     loadData();
@@ -47,6 +49,7 @@ export default function Dashboard() {
       console.log('Data loaded successfully:', sorted);
     } catch (error) {
       console.error('Error loading data:', error);
+      showError('Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -101,9 +104,20 @@ export default function Dashboard() {
     setFilteredExpenses(filtered);
   };
 
-  const handleFormSubmit = () => {
+  const handleFormSubmit = (wasEditing) => {
     console.log('Form submitted, reloading all data...');
+
+    // Determine what action happened based on whether we were editing
+    const isUpdate = wasEditing || editingExpense !== null;
+
     loadData();
+
+    if (isUpdate) {
+      success('Expense updated successfully');
+    } else {
+      success('Expense added successfully');
+    }
+
     setEditingExpense(null);
   };
 
@@ -114,6 +128,11 @@ export default function Dashboard() {
 
   const handleCancelEdit = () => {
     setEditingExpense(null);
+  };
+
+  const handleDeleteExpense = () => {
+    loadData();
+    success('Expense deleted successfully');
   };
 
   const getCurrentMonthExpenses = () => {
@@ -225,7 +244,7 @@ export default function Dashboard() {
           <ExpenseTable
             expenses={filteredExpenses}
             onEdit={handleEdit}
-            onDelete={loadData}
+            onDelete={handleDeleteExpense}
           />
         </div>
       </div>
