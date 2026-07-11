@@ -35,9 +35,13 @@ if ('serviceWorker' in navigator) {
     
     // Listen for messages from service worker (e.g., SW_UPDATED)
     navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data.type === 'SW_UPDATED') {
-        console.log('Service Worker updated, reloading for fresh data...');
-        window.location.reload();
+      try {
+        if (event.data && event.data.type === 'SW_UPDATED') {
+          console.log('Service Worker updated, reloading for fresh data...');
+          window.location.reload();
+        }
+      } catch (error) {
+        console.warn('Error handling SW message:', error);
       }
     });
   });

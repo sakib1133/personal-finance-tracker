@@ -61,7 +61,10 @@ self.addEventListener('fetch', (event) => {
           // For mutations, fail immediately (don't return stale data)
           return new Response(
             JSON.stringify({ error: 'Network error - offline' }),
-            { status: 503, statusText: 'Service Unavailable' }
+            { 
+              status: 503,
+              headers: { 'Content-Type': 'application/json' }
+            }
           );
         })
     );
@@ -118,7 +121,8 @@ self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME];
   
   event.waitUntil(
-    caches.keys()
+    Promise.resolve()
+      .then(() => caches.keys())
       .then((cacheNames) => {
         console.log('Found caches:', cacheNames);
         return Promise.all(
@@ -133,17 +137,24 @@ self.addEventListener('activate', (event) => {
       })
       .then(() => {
         console.log('Claiming clients...');
-        return self.clients.claim(); // Take control immediately
+        return self.clients.claim();
       })
       .then(() => {
         console.log('Service Worker activation complete');
-        // Notify all clients to reload
         return self.clients.matchAll();
       })
       .then((clients) => {
-        clients.forEach(client => {
-          client.postMessage({ type: 'SW_UPDATED' });
+        console.log('Notifying', clients.length, 'clients of update');
+        clients.forEach((client) => {
+          try {
+            client.postMessage({ type: 'SW_UPDATED' });
+          } catch (error) {
+            console.warn('Failed to post message to client:', error);
+          }
         });
+      })
+      .catch((error) => {
+        console.error('Error during activation:', error);
       })
   );
 });
