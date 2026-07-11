@@ -3,11 +3,11 @@ import { useState } from 'react';
 const CATEGORIES = ['All', 'Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
 const DATE_RANGES = ['All Time', 'This Month', 'Last Month', 'Custom'];
 
-export default function FilterBar({ onFilterChange }) {
-  const [category, setCategory] = useState('All');
-  const [dateRange, setDateRange] = useState('All Time');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+export default function FilterBar({ onFilterChange, activeFilters }) {
+  const [category, setCategory] = useState(activeFilters?.category || 'All');
+  const [dateRange, setDateRange] = useState(activeFilters?.dateRange || 'All Time');
+  const [startDate, setStartDate] = useState(activeFilters?.startDate || '');
+  const [endDate, setEndDate] = useState(activeFilters?.endDate || '');
 
   const handleCategoryChange = (newCategory) => {
     setCategory(newCategory);

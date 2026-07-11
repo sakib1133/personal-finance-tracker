@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getExpenses } from '../api/expenses';
 import { getBudgets } from '../api/budgets';
 import ExpenseForm from '../components/ExpenseForm';
@@ -20,6 +20,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const { success, error: showError } = useToast();
 
+  // Track current filter state so filters are re-applied after data refreshes
+  const [activeFilters, setActiveFilters] = useState({ category: 'All', dateRange: 'All Time', startDate: '', endDate: '' });
+
   useEffect(() => {
     loadData();
 
@@ -37,42 +40,8 @@ export default function Dashboard() {
     };
   }, []);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      console.log('Loading fresh data...');
-      const [expensesData, budgetsData] = await Promise.all([getExpenses(), getBudgets()]);
-      const sorted = expensesData.sort((a, b) => new Date(b.date) - new Date(a.date));
-      setExpenses(sorted);
-      setFilteredExpenses(sorted);
-      setBudgets(budgetsData);
-      console.log('Data loaded successfully:', sorted);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      showError('Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadExpenses = async () => {
-    try {
-      setLoading(true);
-      console.log('Refreshing expenses...');
-      const data = await getExpenses();
-      const sorted = data.sort((a, b) => new Date(b.date) - new Date(a.date));
-      setExpenses(sorted);
-      setFilteredExpenses(sorted);
-      console.log('Expenses refreshed:', sorted);
-    } catch (error) {
-      console.error('Error loading expenses:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFilterChange = (filters) => {
-    let filtered = [...expenses];
+  const applyFilters = (expensesList, filters) => {
+    let filtered = [...expensesList];
 
     if (filters.category !== 'All') {
       filtered = filtered.filter(exp => exp.category === filters.category);
@@ -101,7 +70,46 @@ export default function Dashboard() {
       });
     }
 
-    setFilteredExpenses(filtered);
+    return filtered;
+  };
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      console.log('Loading fresh data...');
+      const [expensesData, budgetsData] = await Promise.all([getExpenses(), getBudgets()]);
+      const sorted = expensesData.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setExpenses(sorted);
+      setFilteredExpenses(applyFilters(sorted, activeFilters));
+      setBudgets(budgetsData);
+      console.log('Data loaded successfully:', sorted);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      showError('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadExpenses = async () => {
+    try {
+      setLoading(true);
+      console.log('Refreshing expenses...');
+      const data = await getExpenses();
+      const sorted = data.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setExpenses(sorted);
+      setFilteredExpenses(applyFilters(sorted, activeFilters));
+      console.log('Expenses refreshed:', sorted);
+    } catch (error) {
+      console.error('Error loading expenses:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFilterChange = (filters) => {
+    setActiveFilters(filters);
+    setFilteredExpenses(applyFilters(expenses, filters));
   };
 
   const handleFormSubmit = (wasEditing) => {
@@ -216,7 +224,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          <FilterBar onFilterChange={handleFilterChange} />
+          <FilterBar onFilterChange={handleFilterChange} activeFilters={activeFilters} />
 
           <div className="flex justify-end mb-4">
             <ExportButton expenses={filteredExpenses} />
