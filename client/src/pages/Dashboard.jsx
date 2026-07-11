@@ -24,11 +24,14 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
+      setLoading(true);
+      console.log('Loading fresh data...');
       const [expensesData, budgetsData] = await Promise.all([getExpenses(), getBudgets()]);
       const sorted = expensesData.sort((a, b) => new Date(b.date) - new Date(a.date));
       setExpenses(sorted);
       setFilteredExpenses(sorted);
       setBudgets(budgetsData);
+      console.log('Data loaded successfully:', sorted);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -38,10 +41,13 @@ export default function Dashboard() {
 
   const loadExpenses = async () => {
     try {
+      setLoading(true);
+      console.log('Refreshing expenses...');
       const data = await getExpenses();
       const sorted = data.sort((a, b) => new Date(b.date) - new Date(a.date));
       setExpenses(sorted);
       setFilteredExpenses(sorted);
+      console.log('Expenses refreshed:', sorted);
     } catch (error) {
       console.error('Error loading expenses:', error);
     } finally {
@@ -83,6 +89,7 @@ export default function Dashboard() {
   };
 
   const handleFormSubmit = () => {
+    console.log('Form submitted, reloading all data...');
     loadData();
     setEditingExpense(null);
   };
