@@ -1,4 +1,4 @@
-const CACHE_NAME = 'expense-tracker-v4'; // Force new installation
+const CACHE_NAME = 'expense-tracker-v5'; // Updated to force new install cycle
 const urlsToCache = [
   '/',
   '/index.html',
@@ -9,17 +9,27 @@ const urlsToCache = [
 
 // Install event - cache assets
 self.addEventListener('install', (event) => {
+  console.log('Service Worker installing, version:', CACHE_NAME);
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('Opened cache:', CACHE_NAME);
-        return cache.addAll(urlsToCache);
+        return cache.addAll(urlsToCache)
+          .catch((error) => {
+            // Some assets might fail (e.g., icons), continue anyway
+            console.warn('Some cache assets failed to load:', error);
+            return Promise.resolve();
+          });
+      })
+      .then(() => {
+        console.log('SW install completed, skipping wait...');
+        self.skipWaiting();
       })
       .catch((error) => {
         console.error('Cache install failed:', error);
+        self.skipWaiting();
       })
   );
-  self.skipWaiting(); // Activate immediately
 });
 
 // Fetch event - network-first for API, cache-first for assets
@@ -122,6 +132,10 @@ self.addEventListener('activate', (event) => {
   
   event.waitUntil(
     Promise.resolve()
+      .then(() => {
+        console.log('Claiming clients...');
+        return self.clients.claim();
+      })
       .then(() => caches.keys())
       .then((cacheNames) => {
         console.log('Found caches:', cacheNames);
@@ -129,18 +143,20 @@ self.addEventListener('activate', (event) => {
           cacheNames.map((cacheName) => {
             if (!cacheWhitelist.includes(cacheName)) {
               console.log('Deleting old cache:', cacheName);
-              return caches.delete(cacheName);
+              return caches.delete(cacheName)
+                .then(() => {
+                  console.log('Deleted cache:', cacheName);
+                })
+                .catch((error) => {
+                  console.warn('Failed to delete cache:', cacheName, error);
+                });
             }
             return Promise.resolve();
           })
         );
       })
       .then(() => {
-        console.log('Claiming clients...');
-        return self.clients.claim();
-      })
-      .then(() => {
-        console.log('Service Worker activation complete');
+        console.log('Service Worker activation complete - ready to serve');
         return self.clients.matchAll();
       })
       .then((clients) => {
@@ -168,7 +184,9 @@ self.addEventListener('sync', (event) => {
 
 // Handle skip waiting message for PWA updates
 self.addEventListener('message', (event) => {
+  console.log('SW received message:', event.data);
   if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('SKIP_WAITING message received, skipping wait...');
     self.skipWaiting();
   }
 });
