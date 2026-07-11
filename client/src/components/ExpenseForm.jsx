@@ -11,6 +11,8 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
     note: ''
   });
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   useEffect(() => {
     if (editingExpense) {
@@ -54,6 +56,9 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
     
     if (!validate()) return;
 
+    setLoading(true);
+    setApiError('');
+
     try {
       if (editingExpense) {
         await updateExpense(editingExpense.id, formData);
@@ -69,7 +74,11 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
       });
       setErrors({});
     } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to save expense';
+      setApiError(errorMessage);
       console.error('Error saving expense:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -79,6 +88,11 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
         {editingExpense ? 'Edit Expense' : 'Add New Expense'}
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {apiError && (
+          <div className="p-3 rounded-md text-sm" style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
+            {apiError}
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
             Amount (₹)
@@ -147,15 +161,17 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
         <div className="flex gap-3">
           <button
             type="submit"
-            className="flex-1 text-white py-2 px-4 transition-colors text-sm sm:text-base" style={{ backgroundColor: 'var(--primary)', borderRadius: '10px' }}
+            disabled={loading}
+            className="flex-1 text-white py-2 px-4 transition-colors text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: 'var(--primary)', borderRadius: '10px' }}
           >
-            {editingExpense ? 'Update' : 'Add'} Expense
+            {loading ? 'Saving...' : (editingExpense ? 'Update' : 'Add') + ' Expense'}
           </button>
           {editingExpense && (
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 py-2 px-4 transition-colors text-sm sm:text-base" style={{ backgroundColor: '#e2e8f0', color: 'var(--text-primary)', borderRadius: '10px' }}
+              disabled={loading}
+              className="flex-1 py-2 px-4 transition-colors text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed" style={{ backgroundColor: '#e2e8f0', color: 'var(--text-primary)', borderRadius: '10px' }}
             >
               Cancel
             </button>

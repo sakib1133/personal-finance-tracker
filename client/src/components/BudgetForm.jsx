@@ -6,8 +6,9 @@ export default function BudgetForm({ onSubmit, onCancel, editingBudget }) {
   const [category, setCategory] = useState(editingBudget?.category || '');
   const [monthlyBudget, setMonthlyBudget] = useState(editingBudget?.monthlyBudget || '');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -21,10 +22,17 @@ export default function BudgetForm({ onSubmit, onCancel, editingBudget }) {
       return;
     }
 
-    onSubmit({
-      category,
-      monthlyBudget: parseFloat(monthlyBudget)
-    });
+    setLoading(true);
+    try {
+      await onSubmit({
+        category,
+        monthlyBudget: parseFloat(monthlyBudget)
+      });
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to save budget');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -80,15 +88,17 @@ export default function BudgetForm({ onSubmit, onCancel, editingBudget }) {
         <div className="flex gap-3">
           <button
             type="submit"
-            className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors text-sm sm:text-base"
+            disabled={loading}
+            className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {editingBudget ? 'Update Budget' : 'Add Budget'}
+            {loading ? 'Saving...' : (editingBudget ? 'Update Budget' : 'Add Budget')}
           </button>
           {onCancel && (
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors text-sm sm:text-base"
+              disabled={loading}
+              className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 transition-colors text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
             >
               Cancel

@@ -12,15 +12,15 @@ export const AuthProvider = ({ children }) => {
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
       setToken(storedToken);
-      fetchCurrentUser(storedToken);
+      fetchCurrentUser();
     } else {
       setLoading(false);
     }
   }, []);
 
-  const fetchCurrentUser = async (authToken) => {
+  const fetchCurrentUser = async () => {
     try {
-      const userData = await getCurrentUser(authToken);
+      const userData = await getCurrentUser();
       setUser(userData);
     } catch (error) {
       console.error('Failed to fetch current user:', error);

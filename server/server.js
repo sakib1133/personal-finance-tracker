@@ -20,7 +20,16 @@ if (NODE_ENV === 'production' && JWT_SECRET === 'your-secret-key-change-this-in-
   process.exit(1);
 }
 
-app.use(cors());
+// CORS configuration - restrict to your domain in production
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || '*',
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Serve static files from React build in production
