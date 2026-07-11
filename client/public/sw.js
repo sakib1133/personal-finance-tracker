@@ -37,7 +37,12 @@ self.addEventListener('fetch', (event) => {
 
         return fetch(fetchRequest).then((response) => {
           // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+          if (!response || response.status !== 200) {
+            return response;
+          }
+
+          // Only cache GET requests - POST, DELETE, etc. are not cacheable
+          if (event.request.method !== 'GET') {
             return response;
           }
 
@@ -47,6 +52,9 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME)
             .then((cache) => {
               cache.put(event.request, responseToCache);
+            })
+            .catch((error) => {
+              console.warn('Failed to cache response:', error);
             });
 
           return response;
