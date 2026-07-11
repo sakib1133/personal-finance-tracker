@@ -1,31 +1,33 @@
 # Expense Tracker - Deployment Guide
 
-This guide will help you deploy the Expense Tracker application to Render as a single web service.
+This guide covers deploying the React frontend to Vercel and the Express API with a Neon PostgreSQL database.
 
 ## Overview
 
-The Expense Tracker is deployed as a single Render Web Service that:
-- Serves the React frontend (built with Vite)
-- Runs the Express backend API
-- Uses SQLite database with persistent storage
-- Handles authentication with JWT
+The Expense Tracker is deployed as:
+- Frontend: Vercel static app (Vite)
+- Backend: Node.js/Express API on Render or another Node host
+- Database: Neon PostgreSQL
+- Authentication: JWT with bcrypt password hashing
 
 ## Prerequisites
 
 - A GitHub account with the project pushed to a repository
-- A Render account (free tier available)
+- A Vercel account
+- A Neon account
+- A Node host such as Render (optional for the API)
 - Git installed on your local machine
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────┐
-│         Render Web Service          │
+│           Vercel + API Host         │
 │  ┌─────────────────────────────┐   │
 │  │   Express Server (Node.js)   │   │
 │  │  - API Routes                │   │
 │  │  - JWT Authentication        │   │
-│  │  - SQLite Database           │   │
+│  │  - Neon PostgreSQL Database  │   │
 │  └─────────────────────────────┘   │
 │              ↓                     │
 │  ┌─────────────────────────────┐   │
@@ -49,28 +51,40 @@ git commit -m "Prepare for Render deployment"
 git push origin main
 ```
 
-### 2. Set Up Render
+### 2. Create the Neon Database
 
-1. Go to [render.com](https://render.com) and sign up/log in
-2. Click "New +" → "Web Service"
-3. Connect your GitHub account
-4. Select your expense-tracker repository
-5. Configure the service (see Configuration below)
+1. Sign in to Neon and create a project.
+2. Copy the connection string.
+3. Keep the value in the form:
+   `postgresql://user:password@host/dbname?sslmode=require`
 
-### 3. Configure Render Service
+### 3. Deploy the Backend
 
-#### Basic Settings
+1. Create a Render web service (or any Node hosting provider).
+2. Connect your GitHub repository.
+3. Set the build and start commands:
+   - Build: `cd server && npm install && npm run build`
+   - Start: `cd server && npm start`
+4. Add environment variables:
+   - `NODE_ENV=production`
+   - `PORT=10000`
+   - `JWT_SECRET=<strong random value>`
+   - `DATABASE_URL=<your Neon connection string>`
 
-- **Name**: `expense-tracker` (or your preferred name)
+### 4. Deploy the Frontend to Vercel
+
+#### Backend Settings
+
+- **Name**: `expense-tracker-api` (or your preferred name)
 - **Region**: Choose the region closest to your users
 - **Branch**: `main`
 - **Runtime**: `Node`
 - **Build Command**: `cd server && npm install && npm run build`
 - **Start Command**: `cd server && npm start`
 
-#### Environment Variables
+#### Backend Environment Variables
 
-Add the following environment variables in Render:
+Add the following environment variables in your Node host:
 
 | Variable | Value | Description |
 |----------|-------|-------------|
@@ -78,19 +92,11 @@ Add the following environment variables in Render:
 | `PORT` | `10000` | Render's default port |
 | `JWT_SECRET` | `[Generate]` | Click "Generate" to create a secure secret |
 
-**Important**: The `JWT_SECRET` must be set in production. Use Render's "Generate" feature to create a secure random value.
+**Important**: The `JWT_SECRET` must be set in production. Use a strong random value.
 
-#### Persistent Disk
+### 5. Deploy
 
-Configure persistent disk for SQLite database:
-
-- **Name**: `data`
-- **Mount Path**: `/opt/render/project/data`
-- **Size**: 1 GB (minimum)
-
-### 4. Deploy
-
-Click "Create Web Service" to start the deployment. Render will:
+Click "Create Web Service" to start the deployment. Your host will:
 
 1. Clone your repository
 2. Install dependencies (server and client)
@@ -100,14 +106,14 @@ Click "Create Web Service" to start the deployment. Render will:
 
 The deployment typically takes 3-5 minutes.
 
-### 5. Access Your Application
+### 6. Access Your Application
 
-Once deployed, you can access your application at:
+Once deployed, you can access your API at:
 ```
-https://expense-tracker.onrender.com
+https://expense-tracker-api.onrender.com
 ```
 
-Replace `expense-tracker` with your service name.
+Replace `expense-tracker-api` with your service name.
 
 ## Using render.yaml (Alternative Method)
 
@@ -143,18 +149,18 @@ On Render, environment variables are set in the dashboard. The `JWT_SECRET` shou
 
 ## Database
 
-### SQLite on Render
+### Neon PostgreSQL
 
-The SQLite database is stored on Render's persistent disk at:
-- **Path**: `/opt/render/project/data/expense_tracker.db`
-- **Size**: Up to 1 GB (configurable)
+The application connects to Neon PostgreSQL using the `DATABASE_URL` environment variable.
 
-The database is automatically created on first deployment if it doesn't exist.
+The database tables are created automatically on startup:
+- `users`
+- `expenses`
+- `budgets`
 
 ### Local Development
 
-Locally, the database is stored at:
-- **Path**: `server/expense_tracker.db`
+Set your local `.env` file in the `server` directory with a Neon connection string.
 
 ### Database Schema
 
@@ -181,9 +187,9 @@ Schema is automatically initialized on startup.
 **Issue**: Database connection errors
 
 **Solutions**:
-- Ensure persistent disk is configured
-- Check that mount path is `/opt/render/project/data`
-- Verify database initialization logs
+- Ensure `DATABASE_URL` is set correctly
+- Verify the Neon connection string uses `?sslmode=require`
+- Check that the server logs show schema initialization
 
 ### SPA Routing Issues
 
@@ -259,7 +265,7 @@ The application is healthy if:
 1. **JWT Secret**: Always use a strong, randomly generated secret
 2. **Environment Variables**: Never commit `.env` files to Git
 3. **HTTPS**: Render automatically provides SSL certificates
-4. **Database**: SQLite is on persistent disk, but consider PostgreSQL for production scale
+4. **Database**: Neon PostgreSQL is used for production reliability and scale
 5. **CORS**: CORS is enabled for development; restrict in production if needed
 
 ## Scaling
@@ -289,7 +295,7 @@ For issues specific to:
 Your Expense Tracker is now configured for production deployment on Render with:
 - ✅ Single web service architecture
 - ✅ React frontend served by Express
-- ✅ SQLite database with persistent storage
+- ✅ Neon PostgreSQL database
 - ✅ JWT authentication
 - ✅ SPA routing support
 - ✅ Environment variable configuration

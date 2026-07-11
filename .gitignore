@@ -19,9 +19,25 @@ npm-debug.log*
 
 # Build outputs
 client/dist/
-server/expense_tracker.db
-server/expense_tracker.db-shm
-server/expense_tracker.db-wal
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Server JSON backup files
+server/data/*.json
+server/data/*.json.backup*
+server/data/*.backup*
+
+# Legacy backup server directory
+server-backup/
 
 # Render
 .render/

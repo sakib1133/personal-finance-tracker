@@ -1,6 +1,6 @@
 # Expense Tracker
 
-A full-stack expense tracking application with React frontend and Node.js/Express backend.
+A full-stack expense tracking application with a React frontend and a Node.js/Express backend backed by Neon PostgreSQL.
 
 ## Features
 
@@ -23,7 +23,9 @@ A full-stack expense tracking application with React frontend and Node.js/Expres
 ### Backend
 - Node.js
 - Express
-- CORS
+- PostgreSQL via pg
+- JWT authentication
+- bcryptjs
 - UUID
 
 ## Project Structure

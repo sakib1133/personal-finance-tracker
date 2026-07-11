@@ -17,6 +17,9 @@ services:
 
       - key: JWT_SECRET
         generateValue: true
-      
+
       - key: CORS_ORIGIN
         value: "https://expense-tracker-o0ni.onrender.com"
+
+      - key: DATABASE_URL
+        value: "postgresql://user:password@host/dbname?sslmode=require"

@@ -4,9 +4,8 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { getDb, initDatabase, migrateFromJSON } = require('./db');
+const { query, queryOne, initDatabase, migrateFromJSON } = require('./db');
 
-// Load environment variables
 require('dotenv').config();
 
 const app = express();
@@ -14,13 +13,11 @@ const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// Security: Validate JWT_SECRET in production
 if (NODE_ENV === 'production' && JWT_SECRET === 'your-secret-key-change-this-in-production') {
   console.error('ERROR: JWT_SECRET must be set in production environment');
   process.exit(1);
 }
 
-// CORS configuration - restrict to your domain in production
 const corsOptions = {
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
@@ -32,13 +29,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Disable caching for API routes - CRITICAL FIX for data freshness
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/') || 
-      req.path.startsWith('/expenses') ||
-      req.path.startsWith('/budgets') ||
-      req.path.startsWith('/auth')) {
-    // Prevent all browser and CDN caching for API responses
+  if (
+    req.path.startsWith('/api/') ||
+    req.path.startsWith('/expenses') ||
+    req.path.startsWith('/budgets') ||
+    req.path.startsWith('/auth')
+  ) {
     res.set({
       'Cache-Control': 'no-cache, no-store, must-revalidate, private, max-age=0',
       'Pragma': 'no-cache',
@@ -49,17 +46,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from React build in production
 if (NODE_ENV === 'production') {
   const clientBuildPath = path.join(__dirname, '../client/dist');
   app.use(express.static(clientBuildPath, {
-    setHeaders: (res, path) => {
-      // Set Service-Worker-Allowed header for service worker
-      if (path.endsWith('.js')) {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.js')) {
         res.setHeader('Service-Worker-Allowed', '/');
       }
-      // Cache static assets
-      if (path.match(/\.(js|css|png|jpg|jpeg|svg|ico)$/)) {
+      if (filePath.match(/\.(js|css|png|jpg|jpeg|svg|ico)$/)) {
         res.setHeader('Cache-Control', 'public, max-age=31536000');
       }
     }
@@ -67,7 +61,6 @@ if (NODE_ENV === 'production') {
   console.log('Serving static files from:', clientBuildPath);
 }
 
-// GET / - Root route
 app.get('/', (req, res) => {
   if (NODE_ENV === 'production') {
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
@@ -76,7 +69,6 @@ app.get('/', (req, res) => {
   }
 });
 
-// JWT Authentication Middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -94,7 +86,6 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// POST /auth/register - Register a new user
 app.post('/auth/register', async (req, res) => {
   try {
     const { fullName, email, password, confirmPassword } = req.body;
@@ -116,22 +107,19 @@ app.post('/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    const db = getDb();
     const userId = uuidv4();
     const hashedPassword = await bcrypt.hash(password, 10);
-    const createdAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const createdAt = new Date().toISOString();
 
-    // Check if email already exists
-    const row = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    
-    if (row) {
+    const existingUser = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingUser) {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
-    // Insert new user
-    db.prepare(
-      'INSERT INTO users (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(userId, fullName, email, hashedPassword, createdAt);
+    await query(
+      'INSERT INTO users (id, name, email, password, created_at) VALUES ($1, $2, $3, $4, $5)',
+      [userId, fullName, email, hashedPassword, createdAt]
+    );
 
     const token = jwt.sign({ id: userId, email, fullName }, JWT_SECRET, { expiresIn: '7d' });
 
@@ -150,7 +138,6 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// POST /auth/login - Login user
 app.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -159,10 +146,7 @@ app.post('/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const db = getDb();
-    
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-
+    const user = await queryOne('SELECT * FROM users WHERE email = $1', [email]);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -189,12 +173,9 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// GET /auth/me - Get current user
-app.get('/auth/me', authenticateToken, (req, res) => {
+app.get('/auth/me', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    
-    const user = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.user.id);
+    const user = await queryOne('SELECT id, name, email FROM users WHERE id = $1', [req.user.id]);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -211,54 +192,43 @@ app.get('/auth/me', authenticateToken, (req, res) => {
   }
 });
 
-// GET /expenses - Get all expenses
-app.get('/expenses', authenticateToken, (req, res) => {
+app.get('/expenses', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    
-    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
-    
+    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
     res.json(expenses);
   } catch (error) {
     res.status(500).json({ error: 'Failed to read expenses' });
   }
 });
 
-// POST /expenses - Create a new expense
-app.post('/expenses', authenticateToken, (req, res) => {
+app.post('/expenses', authenticateToken, async (req, res) => {
   try {
     const { amount, category, date, note } = req.body;
-    
+
     if (!amount || !category || !date) {
       return res.status(400).json({ error: 'Amount, category, and date are required' });
     }
 
-    const db = getDb();
     const expenseId = uuidv4();
-    const createdAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const createdAt = new Date().toISOString();
 
-    db.prepare(
-      'INSERT INTO expenses (id, user_id, amount, category, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(expenseId, req.user.id, parseFloat(amount), category, date, note || '', createdAt);
+    const rows = await query(
+      'INSERT INTO expenses (id, user_id, amount, category, date, note, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [expenseId, req.user.id, parseFloat(amount), category, date, note || '', createdAt]
+    );
 
-    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(expenseId);
-    
-    res.status(201).json(expense);
+    res.status(201).json(rows[0]);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create expense' });
   }
 });
 
-// PUT /expenses/:id - Update an expense
-app.put('/expenses/:id', authenticateToken, (req, res) => {
+app.put('/expenses/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { amount, category, date, note } = req.body;
 
-    const db = getDb();
-
-    // First check if expense exists and belongs to user
-    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+    const expense = await queryOne('SELECT * FROM expenses WHERE id = $1', [id]);
 
     if (!expense) {
       return res.status(404).json({ error: 'Expense not found' });
@@ -268,24 +238,23 @@ app.put('/expenses/:id', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Build update query dynamically based on provided fields
     const updates = [];
     const values = [];
 
     if (amount !== undefined) {
-      updates.push('amount = ?');
+      updates.push('amount = $' + (values.length + 1));
       values.push(parseFloat(amount));
     }
     if (category) {
-      updates.push('category = ?');
+      updates.push('category = $' + (values.length + 1));
       values.push(category);
     }
     if (date) {
-      updates.push('date = ?');
+      updates.push('date = $' + (values.length + 1));
       values.push(date);
     }
     if (note !== undefined) {
-      updates.push('note = ?');
+      updates.push('note = $' + (values.length + 1));
       values.push(note);
     }
 
@@ -294,27 +263,19 @@ app.put('/expenses/:id', authenticateToken, (req, res) => {
     }
 
     values.push(id);
+    const rows = await query(`UPDATE expenses SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`, values);
 
-    db.prepare(
-      `UPDATE expenses SET ${updates.join(', ')} WHERE id = ?`
-    ).run(values);
-
-    const updatedExpense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
-    
-    res.json(updatedExpense);
+    res.json(rows[0]);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update expense' });
   }
 });
 
-// DELETE /expenses/:id - Delete an expense
-app.delete('/expenses/:id', authenticateToken, (req, res) => {
+app.delete('/expenses/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const db = getDb();
 
-    // First check if expense exists and belongs to user
-    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+    const expense = await queryOne('SELECT * FROM expenses WHERE id = $1', [id]);
 
     if (!expense) {
       return res.status(404).json({ error: 'Expense not found' });
@@ -324,39 +285,34 @@ app.delete('/expenses/:id', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    db.prepare('DELETE FROM expenses WHERE id = ?').run(id);
-    
+    await query('DELETE FROM expenses WHERE id = $1', [id]);
+
     res.json({ message: 'Expense deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete expense' });
   }
 });
 
-// GET /budgets - Get all budgets for current user
-app.get('/budgets', authenticateToken, (req, res) => {
+app.get('/budgets', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    
-    const budgets = db.prepare('SELECT * FROM budgets WHERE user_id = ?').all(req.user.id);
-    
-    // Transform to match expected format
-    const transformedBudgets = budgets.map(b => ({
-      id: b.id,
-      userId: b.user_id,
-      category: b.category,
-      monthlyBudget: b.monthly_budget,
-      createdAt: b.created_at,
-      updatedAt: b.updated_at
+    const budgets = await query('SELECT * FROM budgets WHERE user_id = $1', [req.user.id]);
+
+    const transformedBudgets = budgets.map((budget) => ({
+      id: budget.id,
+      userId: budget.user_id,
+      category: budget.category,
+      monthlyBudget: budget.monthly_budget,
+      createdAt: budget.created_at,
+      updatedAt: budget.updated_at
     }));
-    
+
     res.json(transformedBudgets);
   } catch (error) {
     res.status(500).json({ error: 'Failed to read budgets' });
   }
 });
 
-// POST /budgets - Create a new budget
-app.post('/budgets', authenticateToken, (req, res) => {
+app.post('/budgets', authenticateToken, async (req, res) => {
   try {
     const { category, monthlyBudget } = req.body;
 
@@ -373,25 +329,20 @@ app.post('/budgets', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Monthly budget must be a positive number' });
     }
 
-    const db = getDb();
     const budgetId = uuidv4();
-    const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const now = new Date().toISOString();
 
-    // Check if budget already exists for this category
-    const existingBudget = db.prepare(
-      'SELECT id FROM budgets WHERE user_id = ? AND category = ?'
-    ).get(req.user.id, category);
-
+    const existingBudget = await queryOne('SELECT id FROM budgets WHERE user_id = $1 AND category = $2', [req.user.id, category]);
     if (existingBudget) {
       return res.status(400).json({ error: 'Budget already exists for this category' });
     }
 
-    db.prepare(
-      'INSERT INTO budgets (id, user_id, category, monthly_budget, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(budgetId, req.user.id, category, parseFloat(monthlyBudget), now, now);
+    const rows = await query(
+      'INSERT INTO budgets (id, user_id, category, monthly_budget, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [budgetId, req.user.id, category, parseFloat(monthlyBudget), now, now]
+    );
 
-    const budget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(budgetId);
-
+    const budget = rows[0];
     const transformedBudget = {
       id: budget.id,
       userId: budget.user_id,
@@ -407,16 +358,12 @@ app.post('/budgets', authenticateToken, (req, res) => {
   }
 });
 
-// PUT /budgets/:id - Update a budget
-app.put('/budgets/:id', authenticateToken, (req, res) => {
+app.put('/budgets/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { category, monthlyBudget } = req.body;
 
-    const db = getDb();
-
-    // First check if budget exists and belongs to user
-    const budget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(id);
+    const budget = await queryOne('SELECT * FROM budgets WHERE id = $1', [id]);
 
     if (!budget) {
       return res.status(404).json({ error: 'Budget not found' });
@@ -432,11 +379,7 @@ app.put('/budgets/:id', authenticateToken, (req, res) => {
         return res.status(400).json({ error: 'Invalid category' });
       }
 
-      // Check if category is already used by another budget
-      const existingBudget = db.prepare(
-        'SELECT id FROM budgets WHERE user_id = ? AND category = ? AND id != ?'
-      ).get(req.user.id, category, id);
-
+      const existingBudget = await queryOne('SELECT id FROM budgets WHERE user_id = $1 AND category = $2 AND id != $3', [req.user.id, category, id]);
       if (existingBudget) {
         return res.status(400).json({ error: 'Budget already exists for this category' });
       }
@@ -452,23 +395,19 @@ app.put('/budgets/:id', authenticateToken, (req, res) => {
     const values = [];
 
     if (category) {
-      updates.push('category = ?');
+      updates.push('category = $' + (values.length + 1));
       values.push(category);
     }
     if (monthlyBudget !== undefined) {
-      updates.push('monthly_budget = ?');
+      updates.push('monthly_budget = $' + (values.length + 1));
       values.push(parseFloat(monthlyBudget));
     }
-    updates.push('updated_at = ?');
-    values.push(new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }));
+    updates.push('updated_at = $' + (values.length + 1));
+    values.push(new Date().toISOString());
 
     values.push(id);
-
-    db.prepare(
-      `UPDATE budgets SET ${updates.join(', ')} WHERE id = ?`
-    ).run(values);
-
-    const updatedBudget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(id);
+    const rows = await query(`UPDATE budgets SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`, values);
+    const updatedBudget = rows[0];
 
     const transformedBudget = {
       id: updatedBudget.id,
@@ -485,14 +424,11 @@ app.put('/budgets/:id', authenticateToken, (req, res) => {
   }
 });
 
-// DELETE /budgets/:id - Delete a budget
-app.delete('/budgets/:id', authenticateToken, (req, res) => {
+app.delete('/budgets/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const db = getDb();
 
-    // First check if budget exists and belongs to user
-    const budget = db.prepare('SELECT * FROM budgets WHERE id = ?').get(id);
+    const budget = await queryOne('SELECT * FROM budgets WHERE id = $1', [id]);
 
     if (!budget) {
       return res.status(404).json({ error: 'Budget not found' });
@@ -502,22 +438,21 @@ app.delete('/budgets/:id', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    db.prepare('DELETE FROM budgets WHERE id = ?').run(id);
-    
+    await query('DELETE FROM budgets WHERE id = $1', [id]);
+
     res.json({ message: 'Budget deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete budget' });
   }
 });
 
-// Analytics Endpoints
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', service: 'expense-tracker-api' });
+});
 
-// GET /analytics/summary - Get financial insights summary
-app.get('/analytics/summary', authenticateToken, (req, res) => {
+app.get('/analytics/summary', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    
-    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
+    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);
 
     if (expenses.length === 0) {
       return res.json({
@@ -533,11 +468,11 @@ app.get('/analytics/summary', authenticateToken, (req, res) => {
 
     const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
     const averageExpenseAmount = totalExpenses / expenses.length;
-    const highestSingleExpense = Math.max(...expenses.map(exp => exp.amount));
-    const lowestExpense = Math.min(...expenses.map(exp => exp.amount));
+    const highestSingleExpense = Math.max(...expenses.map((exp) => exp.amount));
+    const lowestExpense = Math.min(...expenses.map((exp) => exp.amount));
 
     const categoryCount = {};
-    expenses.forEach(exp => {
+    expenses.forEach((exp) => {
       categoryCount[exp.category] = (categoryCount[exp.category] || 0) + 1;
     });
     const mostUsedCategory = Object.entries(categoryCount).sort((a, b) => b[1] - a[1])[0][0];
@@ -548,13 +483,13 @@ app.get('/analytics/summary', authenticateToken, (req, res) => {
     const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     const previousMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-    const currentMonthExpenses = expenses.filter(exp => {
+    const currentMonthExpenses = expenses.filter((exp) => {
       const expDate = new Date(exp.date);
       return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
     });
     const currentMonthSpending = currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-    const previousMonthExpenses = expenses.filter(exp => {
+    const previousMonthExpenses = expenses.filter((exp) => {
       const expDate = new Date(exp.date);
       return expDate.getMonth() === previousMonth && expDate.getFullYear() === previousMonthYear;
     });
@@ -575,28 +510,25 @@ app.get('/analytics/summary', authenticateToken, (req, res) => {
   }
 });
 
-// GET /analytics/monthly-trends - Get monthly spending trends for last 12 months
-app.get('/analytics/monthly-trends', authenticateToken, (req, res) => {
+app.get('/analytics/monthly-trends', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    
-    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
+    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);
 
     const months = [];
     const now = new Date();
-    
+
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const month = date.getMonth();
       const year = date.getFullYear();
-      
-      const monthExpenses = expenses.filter(exp => {
+
+      const monthExpenses = expenses.filter((exp) => {
         const expDate = new Date(exp.date);
         return expDate.getMonth() === month && expDate.getFullYear() === year;
       });
-      
+
       const totalSpending = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-      
+
       months.push({
         month: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
         totalSpending
@@ -610,19 +542,16 @@ app.get('/analytics/monthly-trends', authenticateToken, (req, res) => {
   }
 });
 
-// GET /analytics/category-breakdown - Get category spending breakdown
-app.get('/analytics/category-breakdown', authenticateToken, (req, res) => {
+app.get('/analytics/category-breakdown', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    
-    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
+    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);
 
     if (expenses.length === 0) {
       return res.json([]);
     }
 
     const categorySpending = {};
-    expenses.forEach(exp => {
+    expenses.forEach((exp) => {
       if (!categorySpending[exp.category]) {
         categorySpending[exp.category] = 0;
       }
@@ -631,11 +560,13 @@ app.get('/analytics/category-breakdown', authenticateToken, (req, res) => {
 
     const totalSpending = Object.values(categorySpending).reduce((sum, amount) => sum + amount, 0);
 
-    const breakdown = Object.entries(categorySpending).map(([category, amount]) => ({
-      category,
-      amount,
-      percentage: parseFloat(((amount / totalSpending) * 100).toFixed(2))
-    })).sort((a, b) => b.amount - a.amount);
+    const breakdown = Object.entries(categorySpending)
+      .map(([category, amount]) => ({
+        category,
+        amount,
+        percentage: parseFloat(((amount / totalSpending) * 100).toFixed(2))
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
     res.json(breakdown);
   } catch (error) {
@@ -644,24 +575,21 @@ app.get('/analytics/category-breakdown', authenticateToken, (req, res) => {
   }
 });
 
-// GET /analytics/daily-spending - Get daily spending pattern for current month
-app.get('/analytics/daily-spending', authenticateToken, (req, res) => {
+app.get('/analytics/daily-spending', authenticateToken, async (req, res) => {
   try {
-    const db = getDb();
-    
-    const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ?').all(req.user.id);
+    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);
 
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    const currentMonthExpenses = expenses.filter(exp => {
+    const currentMonthExpenses = expenses.filter((exp) => {
       const expDate = new Date(exp.date);
       return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
     });
 
     const dailySpending = {};
-    currentMonthExpenses.forEach(exp => {
+    currentMonthExpenses.forEach((exp) => {
       const expDate = new Date(exp.date);
       const day = expDate.getDate();
       if (!dailySpending[day]) {
@@ -680,11 +608,11 @@ app.get('/analytics/daily-spending', authenticateToken, (req, res) => {
       });
     }
 
-    const highestSpendingDay = dailyData.reduce((max, day) => 
+    const highestSpendingDay = dailyData.reduce((max, day) =>
       day.amount > max.amount ? day : max, { day: 'N/A', amount: 0 });
 
-    const averageDailySpending = currentMonthExpenses.length > 0 
-      ? currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0) / daysInMonth 
+    const averageDailySpending = currentMonthExpenses.length > 0
+      ? currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0) / daysInMonth
       : 0;
 
     res.json({
@@ -698,10 +626,8 @@ app.get('/analytics/daily-spending', authenticateToken, (req, res) => {
   }
 });
 
-// SPA Fallback: Serve React app for all non-API routes in production
 if (NODE_ENV === 'production') {
   app.get('*', (req, res) => {
-    // Don't fallback for API routes
     if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path.startsWith('/expenses') || req.path.startsWith('/budgets') || req.path.startsWith('/analytics')) {
       return res.status(404).json({ error: 'API endpoint not found' });
     }
@@ -709,24 +635,24 @@ if (NODE_ENV === 'production') {
   });
 }
 
-// Initialize and start server
-console.log(`Starting server in ${NODE_ENV} mode...`);
-console.log(`Port: ${PORT}`);
+async function startServer() {
+  try {
+    console.log(`Starting server in ${NODE_ENV} mode...`);
+    console.log(`Port: ${PORT}`);
 
-initDatabase();
-console.log('Database initialized successfully');
+    await initDatabase();
+    await migrateFromJSON();
 
-migrateFromJSON().then(() => {
-  console.log('Data migration completed');
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    if (NODE_ENV === 'production') {
-      console.log('Production mode: Serving React build files');
-    }
-  });
-}).catch(err => {
-  console.error('Migration error:', err);
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-});
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+      if (NODE_ENV === 'production') {
+        console.log('Production mode: Serving React build files');
+      }
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
