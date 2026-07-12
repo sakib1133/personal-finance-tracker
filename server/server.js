@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -46,27 +45,12 @@ app.use((req, res, next) => {
   next();
 });
 
-if (NODE_ENV === 'production') {
-  const clientBuildPath = path.join(__dirname, '../client/dist');
-  app.use(express.static(clientBuildPath, {
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.js')) {
-        res.setHeader('Service-Worker-Allowed', '/');
-      }
-      if (filePath.match(/\.(js|css|png|jpg|jpeg|svg|ico)$/)) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000');
-      }
-    }
-  }));
-  console.log('Serving static files from:', clientBuildPath);
-}
 
 app.get('/', (req, res) => {
-  if (NODE_ENV === 'production') {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-  } else {
-    res.send('Expense Tracker API is running');
-  }
+  res.json({
+    success: true,
+    message: 'Expense Tracker API Running'
+  });
 });
 
 const authenticateToken = (req, res, next) => {
@@ -626,14 +610,6 @@ app.get('/analytics/daily-spending', authenticateToken, async (req, res) => {
   }
 });
 
-if (NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path.startsWith('/expenses') || req.path.startsWith('/budgets') || req.path.startsWith('/analytics')) {
-      return res.status(404).json({ error: 'API endpoint not found' });
-    }
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-  });
-}
 
 async function startServer() {
   try {
@@ -644,10 +620,8 @@ async function startServer() {
     await migrateFromJSON();
 
     app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-      if (NODE_ENV === 'production') {
-        console.log('Production mode: Serving React build files');
-      }
+     console.log(`Server running on port ${PORT}`);
+     console.log('Backend API started successfully');
     });
   } catch (error) {
     console.error('Failed to start server:', error);
