@@ -1,7 +1,9 @@
 import axios from 'axios';
 
-// Use relative URLs in production, localhost in development
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const normalizeBaseUrl = (value) => (value || '').replace(/\/+$/, '');
+const API_BASE_URL = normalizeBaseUrl(
+  import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://personal-finance-tracker-g2oc.onrender.com' : '')
+);
 
 const api = axios.create({
   baseURL: API_BASE_URL,

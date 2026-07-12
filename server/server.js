@@ -26,17 +26,26 @@ const allowedOrigins = [
   'http://127.0.0.1:3000'
 ].filter(Boolean);
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  const normalizedAllowedOrigins = new Set(allowedOrigins.map(normalizeOrigin));
+
+  if (normalizedAllowedOrigins.has(normalizedOrigin)) {
+    return true;
+  }
+
+  return /^(https?:\/\/)(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin) ||
+    /^(https:\/\/.*\.vercel\.app)$/i.test(normalizedOrigin) ||
+    /^(https:\/\/.*\.onrender\.com)$/i.test(normalizedOrigin);
+};
+
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
-
-    const normalizedOrigin = normalizeOrigin(origin);
-    const normalizedAllowedOrigins = new Set(allowedOrigins.map(normalizeOrigin));
-
-    if (normalizedAllowedOrigins.has(normalizedOrigin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
