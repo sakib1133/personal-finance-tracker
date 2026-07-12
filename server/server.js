@@ -434,6 +434,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'expense-tracker-api' });
 });
 
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
 app.get('/analytics/summary', authenticateToken, async (req, res) => {
   try {
     const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "cd ../client && npm install && npm run build"
+    "build": "node -e \"console.log('Backend-only build step skipped')\""
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
