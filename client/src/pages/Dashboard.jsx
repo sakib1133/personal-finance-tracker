@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [activeFilters, setActiveFilters] = useState({ category: 'All', dateRange: 'All Time', startDate: '', endDate: '' });
 
   useEffect(() => {
-    loadData();
+    loadData(true);
 
     // Re-fetch data when the page becomes visible (tab switch, PWA resume)
     const handleVisibility = () => {
@@ -73,9 +73,11 @@ export default function Dashboard() {
     return filtered;
   };
 
-  const loadData = async () => {
+  const loadData = async (showInitialLoading = false) => {
     try {
-      setLoading(true);
+      if (showInitialLoading) {
+        setLoading(true);
+      }
       console.log('Loading fresh data...');
       const [expensesData, budgetsData] = await Promise.all([getExpenses(), getBudgets()]);
       const sorted = expensesData.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -87,13 +89,14 @@ export default function Dashboard() {
       console.error('Error loading data:', error);
       showError('Failed to load data');
     } finally {
-      setLoading(false);
+      if (showInitialLoading) {
+        setLoading(false);
+      }
     }
   };
 
   const loadExpenses = async () => {
     try {
-      setLoading(true);
       console.log('Refreshing expenses...');
       const data = await getExpenses();
       const sorted = data.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -102,8 +105,6 @@ export default function Dashboard() {
       console.log('Expenses refreshed:', sorted);
     } catch (error) {
       console.error('Error loading expenses:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
