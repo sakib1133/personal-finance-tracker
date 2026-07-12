@@ -17,8 +17,32 @@ if (NODE_ENV === 'production' && JWT_SECRET === 'your-secret-key-change-this-in-
   process.exit(1);
 }
 
+const normalizeOrigin = (value) => (value || '').replace(/\/+$/, '');
+const allowedOrigins = [
+  process.env.CORS_ORIGIN,
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000'
+].filter(Boolean);
+
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: (origin, callback) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    const normalizedOrigin = normalizeOrigin(origin);
+    const normalizedAllowedOrigins = new Set(allowedOrigins.map(normalizeOrigin));
+
+    if (normalizedAllowedOrigins.has(normalizedOrigin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -27,6 +51,13 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/')) {
+    req.url = req.originalUrl.replace(/^\/api/, '');
+  }
+  next();
+});
 
 app.use((req, res, next) => {
   if (
