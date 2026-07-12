@@ -1,3 +1,8 @@
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export default function SummaryPanel({ expenses }) {
   const calculateTotals = () => {
     const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
@@ -9,15 +14,15 @@ export default function SummaryPanel({ expenses }) {
       return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
     });
 
-    const totalThisMonth = thisMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const totalThisMonth = thisMonthExpenses.reduce((sum, exp) => sum + toNumber(exp.amount), 0);
 
     const categoryTotals = expenses.reduce((acc, exp) => {
-      acc[exp.category] = (acc[exp.category] || 0) + exp.amount;
+      acc[exp.category] = (acc[exp.category] || 0) + toNumber(exp.amount);
       return acc;
     }, {});
 
     const highestExpense = expenses.length > 0 
-      ? expenses.reduce((max, exp) => exp.amount > max.amount ? exp : max, expenses[0])
+      ? expenses.reduce((max, exp) => toNumber(exp.amount) > toNumber(max.amount) ? exp : max, expenses[0])
       : null;
 
     return {

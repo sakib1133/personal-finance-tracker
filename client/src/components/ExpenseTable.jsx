@@ -1,5 +1,10 @@
 import { deleteExpense } from '../api/expenses';
 
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export default function ExpenseTable({ expenses, onEdit, onDelete }) {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
@@ -85,7 +90,7 @@ export default function ExpenseTable({ expenses, onEdit, onDelete }) {
                   {expense.note || '-'}
                 </td>
                 <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-right font-medium" style={{ color: 'var(--primary)', fontWeight: 700 }}>
-                  ₹{expense.amount.toFixed(2)}
+                  ₹{toNumber(expense.amount).toFixed(2)}
                 </td>
                 <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button

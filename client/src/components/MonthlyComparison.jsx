@@ -1,6 +1,13 @@
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export default function MonthlyComparison({ currentMonth, previousMonth }) {
-  const difference = currentMonth - previousMonth;
-  const percentage = previousMonth > 0 ? ((difference / previousMonth) * 100).toFixed(1) : 0;
+  const safeCurrentMonth = toNumber(currentMonth);
+  const safePreviousMonth = toNumber(previousMonth);
+  const difference = safeCurrentMonth - safePreviousMonth;
+  const percentage = safePreviousMonth > 0 ? ((difference / safePreviousMonth) * 100).toFixed(1) : 0;
   const isIncrease = difference > 0;
 
   return (
@@ -10,12 +17,12 @@ export default function MonthlyComparison({ currentMonth, previousMonth }) {
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <span className="text-gray-600">Current Month</span>
-          <span className="text-xl font-bold text-gray-800">₹{currentMonth.toFixed(2)}</span>
+          <span className="text-xl font-bold text-gray-800">₹{safeCurrentMonth.toFixed(2)}</span>
         </div>
         
         <div className="flex justify-between items-center">
           <span className="text-gray-600">Previous Month</span>
-          <span className="text-xl font-bold text-gray-800">₹{previousMonth.toFixed(2)}</span>
+          <span className="text-xl font-bold text-gray-800">₹{safePreviousMonth.toFixed(2)}</span>
         </div>
         
         <div className="border-t pt-4">

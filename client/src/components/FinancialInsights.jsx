@@ -1,26 +1,31 @@
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export default function FinancialInsights({ data }) {
   const insights = [
     {
       label: 'Total Expenses',
-      value: `₹${data.totalExpenses.toFixed(2)}`,
+      value: `₹${toNumber(data.totalExpenses).toFixed(2)}`,
       color: 'bg-blue-500',
       icon: '💰'
     },
     {
       label: 'Average Expense',
-      value: `₹${data.averageExpenseAmount.toFixed(2)}`,
+      value: `₹${toNumber(data.averageExpenseAmount).toFixed(2)}`,
       color: 'bg-purple-500',
       icon: '📊'
     },
     {
       label: 'Highest Expense',
-      value: `₹${data.highestSingleExpense.toFixed(2)}`,
+      value: `₹${toNumber(data.highestSingleExpense).toFixed(2)}`,
       color: 'bg-red-500',
       icon: '📈'
     },
     {
       label: 'Lowest Expense',
-      value: `₹${data.lowestExpense.toFixed(2)}`,
+      value: `₹${toNumber(data.lowestExpense).toFixed(2)}`,
       color: 'bg-green-500',
       icon: '📉'
     },
@@ -32,13 +37,13 @@ export default function FinancialInsights({ data }) {
     },
     {
       label: 'Current Month',
-      value: `₹${data.currentMonthSpending.toFixed(2)}`,
+      value: `₹${toNumber(data.currentMonthSpending).toFixed(2)}`,
       color: 'bg-indigo-500',
       icon: '📅'
     },
     {
       label: 'Previous Month',
-      value: `₹${data.previousMonthSpending.toFixed(2)}`,
+      value: `₹${toNumber(data.previousMonthSpending).toFixed(2)}`,
       color: 'bg-pink-500',
       icon: '📆'
     }

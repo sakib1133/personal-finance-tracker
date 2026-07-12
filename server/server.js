@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query, queryOne, initDatabase, migrateFromJSON } = require('./db');
+const { normalizeResponseData } = require('./normalizeData');
 
 require('dotenv').config();
 
@@ -60,6 +61,12 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => originalJson(normalizeResponseData(body));
+  next();
+});
 
 app.use((req, res, next) => {
   if (req.originalUrl.startsWith('/api/')) {

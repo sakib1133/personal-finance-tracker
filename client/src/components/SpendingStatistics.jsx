@@ -1,3 +1,8 @@
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export default function SpendingStatistics({ expenses, dailySpendingData }) {
   if (!expenses || expenses.length === 0) {
     return (
@@ -9,7 +14,7 @@ export default function SpendingStatistics({ expenses, dailySpendingData }) {
   }
 
   const totalExpensesCount = expenses.length;
-  const totalAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const totalAmount = expenses.reduce((sum, exp) => sum + toNumber(exp.amount), 0);
   
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -21,7 +26,7 @@ export default function SpendingStatistics({ expenses, dailySpendingData }) {
     return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
   });
   
-  const currentMonthTotal = currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const currentMonthTotal = currentMonthExpenses.reduce((sum, exp) => sum + toNumber(exp.amount), 0);
   const averageDailySpending = currentMonthTotal / daysInMonth;
   
   const monthsWithData = new Set(
@@ -33,8 +38,9 @@ export default function SpendingStatistics({ expenses, dailySpendingData }) {
   
   const averageMonthlySpending = monthsWithData > 0 ? totalAmount / monthsWithData : 0;
   
-  const largestExpense = Math.max(...expenses.map(exp => exp.amount));
-  const smallestExpense = Math.min(...expenses.map(exp => exp.amount));
+  const numericAmounts = expenses.map(exp => toNumber(exp.amount));
+  const largestExpense = Math.max(...numericAmounts);
+  const smallestExpense = Math.min(...numericAmounts);
 
   const stats = [
     {

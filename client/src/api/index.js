@@ -1,6 +1,35 @@
 import axios from 'axios';
 
 const normalizeBaseUrl = (value) => (value || '').replace(/\/+$/, '');
+const normalizeResponseData = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(normalizeResponseData);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => [key, normalizeResponseData(entryValue)])
+    );
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return value;
+    }
+
+    const normalized = trimmed.replace(/,/g, '');
+    if (!/^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(normalized)) {
+      return value;
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : value;
+  }
+
+  return value;
+};
+
 const API_BASE_URL = normalizeBaseUrl(
   import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://personal-finance-tracker-g2oc.onrender.com' : '')
 );
@@ -31,6 +60,13 @@ api.interceptors.request.use((config) => {
   }
   
   return config;
+});
+
+api.interceptors.response.use((response) => {
+  if (response?.data) {
+    response.data = normalizeResponseData(response.data);
+  }
+  return response;
 });
 
 export default api;
