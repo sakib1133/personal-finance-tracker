@@ -77,6 +77,7 @@ border: '1px solid #cbd5e1'
 };
 
 if (!expenses || expenses.length === 0) {
+
 return (
 <div
 className="shadow p-6 text-center border"
@@ -174,7 +175,11 @@ Date </th>
               className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm"
               style={{ color: 'var(--text-secondary)' }}
             >
-              {formatDate(expense.date)}
+              {formatDate(
+  expense.date ||
+  expense.createdAt ||
+  expense.created_at
+)}
             </td>
 
             <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
@@ -245,7 +250,11 @@ Date </th>
               className="text-xs font-medium mb-1"
               style={{ color: 'var(--text-muted)' }}
             >
-              {formatDate(expense.date)}
+              {formatDate(
+  expense.date ||
+  expense.createdAt ||
+  expense.created_at
+)}
             </p>
 
             <span
