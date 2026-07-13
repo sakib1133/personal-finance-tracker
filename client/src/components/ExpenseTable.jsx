@@ -133,7 +133,7 @@ export default function ExpenseTable({ expenses, onEdit, onDelete }) {
                 </span>
               </div>
               <p className="text-lg font-bold" style={{ color: 'var(--primary)' }}>
-                ₹{expense.amount.toFixed(2)}
+                ₹{toNumber(expense.amount).toFixed(2)}
               </p>
             </div>
             {expense.note && (
