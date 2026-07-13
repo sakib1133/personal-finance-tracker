@@ -4,16 +4,19 @@ function normalizeValue(value) {
   }
 
   const trimmed = value.trim();
+
   if (!trimmed) {
     return value;
   }
 
   const normalized = trimmed.replace(/,/g, '');
+
   if (!/^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(normalized)) {
     return value;
   }
 
   const parsed = Number(normalized);
+
   return Number.isFinite(parsed) ? parsed : value;
 }
 
@@ -22,9 +25,17 @@ function normalizeResponseData(data) {
     return data.map(normalizeResponseData);
   }
 
+  // IMPORTANT FIX
+  if (data instanceof Date) {
+    return data.toISOString();
+  }
+
   if (data && typeof data === 'object') {
     return Object.fromEntries(
-      Object.entries(data).map(([key, value]) => [key, normalizeResponseData(value)])
+      Object.entries(data).map(([key, value]) => [
+        key,
+        normalizeResponseData(value)
+      ])
     );
   }
 
@@ -34,20 +45,14 @@ function normalizeResponseData(data) {
 function normalizeExpense(expense) {
   return {
     ...expense,
-    amount: normalizeValue(expense.amount),
-    created_at: expense.created_at,
-    updated_at: expense.updated_at,
-    user_id: expense.user_id
+    amount: normalizeValue(expense.amount)
   };
 }
 
 function normalizeBudget(budget) {
   return {
     ...budget,
-    monthly_budget: normalizeValue(budget.monthly_budget),
-    created_at: budget.created_at,
-    updated_at: budget.updated_at,
-    user_id: budget.user_id
+    monthly_budget: normalizeValue(budget.monthly_budget)
   };
 }
 
