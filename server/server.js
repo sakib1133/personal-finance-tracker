@@ -12,6 +12,10 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const toNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
 
 if (NODE_ENV === 'production' && JWT_SECRET === 'your-secret-key-change-this-in-production') {
   console.error('ERROR: JWT_SECRET must be set in production environment');
@@ -529,12 +533,24 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
       });
     }
 
-    const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const totalExpenses = expenses.reduce(
+  (sum, exp) => sum + toNumber(exp.amount),
+  0
+);
     const averageExpenseAmount = totalExpenses / expenses.length;
-    const highestSingleExpense = Math.max(...expenses.map((exp) => exp.amount));
-    const lowestExpense = Math.min(...expenses.map((exp) => exp.amount));
+    const highestSingleExpense = Math.max(
+  ...expenses.map((exp) => toNumber(exp.amount))
+);
+
+const lowestExpense = Math.min(
+  ...expenses.map((exp) => toNumber(exp.amount))
+);
+
+
+
 
     const categoryCount = {};
+
     expenses.forEach((exp) => {
       categoryCount[exp.category] = (categoryCount[exp.category] || 0) + 1;
     });
@@ -550,13 +566,21 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
       const expDate = new Date(exp.date);
       return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
     });
-    const currentMonthSpending = currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+   const currentMonthSpending = currentMonthExpenses.reduce(
+  (sum, exp) => sum + toNumber(exp.amount),
+  0
+);
 
     const previousMonthExpenses = expenses.filter((exp) => {
       const expDate = new Date(exp.date);
       return expDate.getMonth() === previousMonth && expDate.getFullYear() === previousMonthYear;
     });
-    const previousMonthSpending = previousMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const previousMonthSpending = previousMonthExpenses.reduce(
+      (sum, exp) => sum + toNumber(exp.amount),
+      0
+    );
+
 
     res.json({
       totalExpenses,
@@ -590,7 +614,11 @@ app.get('/analytics/monthly-trends', authenticateToken, async (req, res) => {
         return expDate.getMonth() === month && expDate.getFullYear() === year;
       });
 
-      const totalSpending = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+      const totalSpending = monthExpenses.reduce(
+        (sum, exp) => sum + toNumber(exp.amount),
+        0
+      );
+
 
       months.push({
         month: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
@@ -618,7 +646,8 @@ app.get('/analytics/category-breakdown', authenticateToken, async (req, res) => 
       if (!categorySpending[exp.category]) {
         categorySpending[exp.category] = 0;
       }
-      categorySpending[exp.category] += exp.amount;
+        categorySpending[exp.category] += toNumber(exp.amount);
+
     });
 
     const totalSpending = Object.values(categorySpending).reduce((sum, amount) => sum + amount, 0);
@@ -658,7 +687,8 @@ app.get('/analytics/daily-spending', authenticateToken, async (req, res) => {
       if (!dailySpending[day]) {
         dailySpending[day] = 0;
       }
-      dailySpending[day] += exp.amount;
+      dailySpending[day] += toNumber(exp.amount);
+
     });
 
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -675,8 +705,12 @@ app.get('/analytics/daily-spending', authenticateToken, async (req, res) => {
       day.amount > max.amount ? day : max, { day: 'N/A', amount: 0 });
 
     const averageDailySpending = currentMonthExpenses.length > 0
-      ? currentMonthExpenses.reduce((sum, exp) => sum + exp.amount, 0) / daysInMonth
+      ? currentMonthExpenses.reduce(
+        (sum, exp) => sum + toNumber(exp.amount),
+        0
+      ) / daysInMonth
       : 0;
+
 
     res.json({
       dailyData,
