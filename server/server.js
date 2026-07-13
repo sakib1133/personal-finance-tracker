@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -9,6 +10,7 @@ const { normalizeResponseData } = require('./normalizeData');
 require('dotenv').config();
 
 const app = express();
+app.use(helmet());
 const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -227,7 +229,8 @@ app.get('/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/expenses', authenticateToken, async (req, res) => {
+app.get('/expenses', authenticateToken, async (req,
+   res) => {
   try {
     const expenses = await query('SELECT * FROM expenses WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
     res.json(expenses);
