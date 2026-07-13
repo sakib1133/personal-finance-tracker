@@ -3,11 +3,18 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const safeToFixed = (value, decimals = 2) => {
+  const n = toNumber(value);
+  return n.toFixed(decimals);
+};
+
 export default function FinancialInsights({ data }) {
+  const d = data || {};
+
   const insights = [
     {
       label: 'Total Expenses',
-      value: `₹${toNumber(data.totalExpenses).toFixed(2)}`,
+      value: `₹${safeToFixed(d.totalExpenses, 2)}`,
       color: 'bg-blue-500',
       icon: '💰'
     },

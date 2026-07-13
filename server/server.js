@@ -232,12 +232,36 @@ app.get('/expenses', authenticateToken, async (req, res) => {
   }
 });
 
+const isValidISODate = (dateValue) => {
+  if (typeof dateValue !== 'string') return false;
+  // Expect YYYY-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
+  const d = new Date(dateValue + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime());
+};
+
+const isFutureDate = (dateValue) => {
+  const d = new Date(dateValue + 'T00:00:00Z');
+  const now = new Date();
+  // Compare only by date (UTC)
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return d.getTime() > todayUTC.getTime();
+};
+
 app.post('/expenses', authenticateToken, async (req, res) => {
   try {
     const { amount, category, date, note } = req.body;
 
     if (!amount || !category || !date) {
       return res.status(400).json({ error: 'Amount, category, and date are required' });
+    }
+
+    if (!isValidISODate(date)) {
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+    }
+
+    if (isFutureDate(date)) {
+      return res.status(400).json({ error: 'Date cannot be in the future' });
     }
 
     const expenseId = uuidv4();
@@ -281,6 +305,14 @@ app.put('/expenses/:id', authenticateToken, async (req, res) => {
       values.push(category);
     }
     if (date) {
+      if (!isValidISODate(date)) {
+        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+      }
+
+      if (isFutureDate(date)) {
+        return res.status(400).json({ error: 'Date cannot be in the future' });
+      }
+
       updates.push('date = $' + (values.length + 1));
       values.push(date);
     }

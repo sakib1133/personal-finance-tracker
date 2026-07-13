@@ -135,11 +135,11 @@ export default function Analytics() {
                   <div className="bg-purple-50 rounded-lg p-3 sm:p-4">
                     <p className="text-xs sm:text-sm text-purple-600 mb-1">Highest Spending Day</p>
                     <p className="text-base sm:text-lg font-bold text-purple-800">{dailySpending.highestSpendingDay.day}</p>
-                    <p className="text-xs sm:text-sm text-purple-600">₹{dailySpending.highestSpendingDay.amount.toFixed(2)}</p>
+                    <p className="text-xs sm:text-sm text-purple-600">₹{Number(dailySpending?.highestSpendingDay?.amount ?? 0).toFixed(2)}</p>
                   </div>
                   <div className="bg-green-50 rounded-lg p-3 sm:p-4">
                     <p className="text-xs sm:text-sm text-green-600 mb-1">Average Daily Spending</p>
-                    <p className="text-base sm:text-lg font-bold text-green-800">₹{dailySpending.averageDailySpending.toFixed(2)}</p>
+                    <p className="text-base sm:text-lg font-bold text-green-800">₹{Number(dailySpending?.averageDailySpending ?? 0).toFixed(2)}</p>
                   </div>
                 </div>
               )}
