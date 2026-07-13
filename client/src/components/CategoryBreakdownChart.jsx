@@ -29,7 +29,12 @@ export default function CategoryBreakdownChart({ data }) {
               fontSize: '12px'
             }}
             formatter={(value, name) => [
-              name === 'amount' ? `₹${value.toFixed(2)}` : `${value}%`,
+              name === 'amount' ? (() => {
+                const n = Number(value);
+                const safe = Number.isFinite(n) ? n : 0;
+                return `₹${safe.toFixed(2)}`;
+              })() : `${value}%`,
+
               name === 'amount' ? 'Amount' : 'Percentage'
             ]}
           />

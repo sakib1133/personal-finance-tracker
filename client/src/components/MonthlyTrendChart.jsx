@@ -28,7 +28,12 @@ export default function MonthlyTrendChart({ data }) {
               color: '#fff',
               fontSize: '12px'
             }}
-            formatter={(value) => `₹${value.toFixed(2)}`}
+            formatter={(value) => {
+              const n = Number(value);
+              const safe = Number.isFinite(n) ? n : 0;
+              return `₹${safe.toFixed(2)}`;
+            }}
+
           />
           <Line 
             type="monotone" 
