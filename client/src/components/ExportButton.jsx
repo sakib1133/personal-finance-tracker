@@ -8,7 +8,7 @@ export default function ExportButton({ expenses }) {
     const headers = ['Serial No', 'Category', 'Amount', 'Date', 'Note', 'Time'];
 
     const rows = expenses.map((expense, index) => {
-      const d = new Date(expense.createdAt);
+      const d = new Date(expense.date);
 
       const date = d.toLocaleDateString('en-IN', {
         day: '2-digit',
