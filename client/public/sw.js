@@ -39,13 +39,15 @@ console.log('Opened cache:', CACHE_NAME);
 self.addEventListener('fetch', (event) => {
 const url = new URL(event.request.url);
 
-// API requests: never cache
+// API requests & private/authenticated content: never cache
 if (
-url.pathname.startsWith('/api/') ||
-url.pathname.startsWith('/expenses') ||
-url.pathname.startsWith('/budgets') ||
-url.pathname.startsWith('/auth') ||
-url.pathname.startsWith('/analytics')
+  url.pathname.startsWith('/api/') ||
+  url.pathname.startsWith('/auth') ||
+  url.pathname.startsWith('/expenses') ||
+  url.pathname.startsWith('/budgets') ||
+  url.pathname.startsWith('/analytics') ||
+  event.request.headers.get('authorization') ||
+  /[?&](token|jwt)=/i.test(url.search)
 ) {
 event.respondWith(
 fetch(event.request).catch(() => {

@@ -21,16 +21,26 @@ const loginLimiter = rateLimit({
     error: 'Too many login attempts. Please try again later.'
   }
 });
+
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many registration attempts. Please try again later.'
+  }
+});
 const PORT = process.env.PORT || 5001;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const toNumber = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 };
 
-if (NODE_ENV === 'production' && JWT_SECRET === 'your-secret-key-change-this-in-production') {
-  console.error('ERROR: JWT_SECRET must be set in production environment');
+if (!JWT_SECRET) {
+  console.error('ERROR: JWT_SECRET is required');
   process.exit(1);
 }
 
@@ -133,7 +143,7 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-app.post('/auth/register', async (req, res) => {
+app.post('/auth/register', registerLimiter, async (req, res) => {
   try {
     const { fullName, email, password, confirmPassword } = req.body;
 
