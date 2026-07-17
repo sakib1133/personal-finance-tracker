@@ -1,52 +1,77 @@
 import { useState, useEffect } from 'react';
 
+const UPDATE_PROMPT_SHOWN_FOR_KEY = 'pwa_update_prompt_shown_for';
+
+function getSwIdentifier(registration) {
+  // Use script URL as stable identifier across deployments.
+  // If your build produces a versioned sw URL, this becomes a perfect “only once per deployment” gate.
+  try {
+    const swUrl = registration?.waiting?.scriptURL || registration?.active?.scriptURL || '';
+    return swUrl;
+  } catch {
+    return '';
+  }
+}
+
 export default function PWAUpdateNotification() {
   const [showUpdate, setShowUpdate] = useState(false);
   const [registration, setRegistration] = useState(null);
 
   useEffect(() => {
-    // Check for service worker updates
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((reg) => {
-        setRegistration(reg);
-        
-        // Listen for updates
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New service worker is available, waiting to be activated
-              setShowUpdate(true);
-            }
-          });
-        });
-        
-        // Also check for waiting service worker on page load
-        if (reg.waiting) {
-          setShowUpdate(true);
+    if (!('serviceWorker' in navigator)) return;
+
+    let didCancel = false;
+
+    navigator.serviceWorker.ready.then((reg) => {
+      if (didCancel) return;
+      setRegistration(reg);
+
+      const maybeShow = () => {
+        if (didCancel) return;
+        if (!reg.waiting) return;
+        if (!navigator.serviceWorker.controller) {
+          // If there is no controller yet, we don't treat it as an “update available”.
+          return;
         }
-      });
-      
-      // Periodically check for updates (every 5 minutes)
-      const interval = setInterval(() => {
-        navigator.serviceWorker.ready.then((reg) => {
-          reg.update();
+
+        const swId = getSwIdentifier(reg);
+        const lastShown = window.localStorage.getItem(UPDATE_PROMPT_SHOWN_FOR_KEY);
+        if (swId && lastShown === swId) {
+          return; // already shown for this waiting SW version
+        }
+
+        window.localStorage.setItem(UPDATE_PROMPT_SHOWN_FOR_KEY, swId || 'unknown');
+        setShowUpdate(true);
+      };
+
+      // Show if there's already a waiting SW (e.g., user refreshed after deployment)
+      maybeShow();
+
+      // Show when a new SW is installed and is waiting to activate
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            maybeShow();
+          }
         });
-      }, 5 * 60 * 1000);
-      
-      return () => clearInterval(interval);
-    }
+      });
+    });
+
+    // No periodic polling. Let browser-triggered update checks or reloads handle update detection.
+    return () => {
+      didCancel = true;
+    };
   }, []);
 
   const handleUpdate = () => {
     if (registration && registration.waiting) {
-      // Send message to waiting service worker to skip waiting
       registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      
-      // When the new service worker activates, reload the page
+
       registration.waiting.addEventListener('statechange', () => {
-        if (registration.waiting.state === 'activated') {
+        if (registration.waiting?.state === 'activated') {
           window.location.reload();
         }
       });
@@ -54,6 +79,7 @@ export default function PWAUpdateNotification() {
   };
 
   const handleDismiss = () => {
+    // Keep gating so “Later” doesn't re-open the same prompt repeatedly.
     setShowUpdate(false);
   };
 
@@ -118,3 +144,4 @@ export default function PWAUpdateNotification() {
     </div>
   );
 }
+

@@ -1,4 +1,7 @@
-const CACHE_NAME = 'expense-tracker-v7';
+// Derive a versioned cache name so each deployment gets its own cache.
+// This reduces false “update available” events caused by mismatched cache state.
+const CACHE_VERSION = (self.__SW_VERSION__ || 'dev').toString();
+const CACHE_NAME = `expense-tracker-${CACHE_VERSION}`;
 
 const urlsToCache = [
 '/',
