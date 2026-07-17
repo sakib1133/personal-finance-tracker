@@ -2,6 +2,8 @@
 
 A full-stack expense tracking application with a React frontend and a Node.js/Express backend backed by Neon PostgreSQL.
 
+🔗 **[Live Demo](https://personal-finance-tracker-cyan-tau.vercel.app/login)** · **[GitHub Repo](https://github.com/sakib1133/personal-finance-tracker)**
+
 ## Features
 
 - **Add/Edit Expenses**: Form with validation (no negative amounts, no future dates, category required)
