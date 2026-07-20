@@ -1,4 +1,4 @@
-# Expense Tracker
+# Personal Finance Tracker
 
 A full-stack daily expense tracking application with a React frontend and a Node.js/Express backend backed by Neon PostgreSQL.
 
@@ -29,6 +29,13 @@ A full-stack daily expense tracking application with a React frontend and a Node
 - JWT authentication
 - bcryptjs
 - UUID
+
+  ## Deployment
+
+- Frontend: Vercel
+- Backend: Render
+- Database: PostreSQL
+- Authentication: JWT
 
 ## Project Structure
 
