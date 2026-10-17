@@ -9,19 +9,21 @@ export default function Navbar() {
 
   const navLinkClass = (path) => {
     const isActive = location.pathname === path;
-    return `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-      isActive
-        ? 'bg-blue-500 text-white'
-        : 'text-gray-700 hover:bg-gray-100'
-    }`;
+    return `app-nav-link ${isActive ? 'app-nav-link-active' : ''}`;
   };
 
   return (
-    <nav className="shadow-md" style={{ backgroundColor: 'var(--bg-card)' }}>
+    <nav className="app-navbar shadow-md" style={{ backgroundColor: 'var(--bg-card)' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <h1 className="text-lg sm:text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+            <span className="app-brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M5 17.5 10 12l3.5 3.5L20 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M15.5 8H20v4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <h1 className="app-brand-title text-lg sm:text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
               Mini Expense Tracker
             </h1>
           </div>
@@ -57,6 +59,8 @@ export default function Navbar() {
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
+              aria-label={isMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={isMenuOpen}
               className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:bg-gray-100 focus:outline-none"
             >
               <svg
@@ -89,7 +93,7 @@ export default function Navbar() {
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden" style={{ backgroundColor: 'var(--bg-card)' }}>
+        <div className="app-mobile-menu md:hidden" style={{ backgroundColor: 'var(--bg-card)' }}>
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             <Link
               to="/dashboard"

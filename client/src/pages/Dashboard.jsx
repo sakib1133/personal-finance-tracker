@@ -201,9 +201,9 @@ export default function Dashboard() {
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-main)' }}>
       <Navbar />
       
-      <div className="py-4 sm:py-8 px-2 sm:px-4">
+      <div className="app-content py-4 sm:py-8 px-2 sm:px-4">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-4 sm:mb-8" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="app-page-title text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-4 sm:mb-8" style={{ color: 'var(--text-primary)' }}>
             Dashboard
           </h1>
 

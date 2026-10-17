@@ -154,16 +154,16 @@ export default function Budgets() {
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-main)' }}>
       <Navbar />
       
-      <div className="py-4 sm:py-8 px-2 sm:px-4">
+      <div className="app-content py-4 sm:py-8 px-2 sm:px-4">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-8 gap-4">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold" style={{ color: 'var(--text-primary)' }}>
+          <div className="app-page-header flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-8 gap-4">
+            <h1 className="app-page-title text-2xl sm:text-3xl md:text-4xl font-bold" style={{ color: 'var(--text-primary)' }}>
               Budget Management
             </h1>
             {!showForm && (
               <button
                 onClick={() => setShowForm(true)}
-                className="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors text-sm sm:text-base"
+                className="app-primary-button bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors text-sm sm:text-base"
               >
                 Add Budget
               </button>
@@ -188,7 +188,7 @@ export default function Budgets() {
               </p>
               <button
                 onClick={() => setShowForm(true)}
-                className="bg-blue-500 text-white py-2 px-4 sm:px-6 rounded-md hover:bg-blue-600 transition-colors text-sm sm:text-base"
+                className="app-primary-button bg-blue-500 text-white py-2 px-4 sm:px-6 rounded-md hover:bg-blue-600 transition-colors text-sm sm:text-base"
               >
                 Create Your First Budget
               </button>
@@ -212,7 +212,7 @@ export default function Budgets() {
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => handleEdit(budget)}
-                      className="flex-1 bg-blue-500 text-white py-2 px-3 sm:px-4 rounded-md hover:bg-blue-600 transition-colors text-xs sm:text-sm"
+                      className="app-primary-button flex-1 bg-blue-500 text-white py-2 px-3 sm:px-4 rounded-md hover:bg-blue-600 transition-colors text-xs sm:text-sm"
                     >
                       Edit
                     </button>

@@ -102,9 +102,9 @@ export default function Analytics() {
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-main)' }}>
       <Navbar />
       
-      <div className="py-4 sm:py-8 px-2 sm:px-4">
+      <div className="app-content py-4 sm:py-8 px-2 sm:px-4">
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-4 sm:mb-8" style={{ color: 'var(--text-primary)' }}>
+          <h1 className="app-page-title text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-4 sm:mb-8" style={{ color: 'var(--text-primary)' }}>
             Analytics Dashboard
           </h1>
 
@@ -115,31 +115,31 @@ export default function Analytics() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-8">
-            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+            <div className="app-surface bg-white rounded-xl shadow-md p-4 sm:p-6">
               <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Monthly Spending Trend</h3>
               <MonthlyTrendChart data={monthlyTrends} />
             </div>
 
-            <div className="bg-white rounded-xl shadow-md p-4 sm:p-6">
+            <div className="app-surface bg-white rounded-xl shadow-md p-4 sm:p-6">
               <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Category Breakdown</h3>
               <CategoryBreakdownChart data={categoryBreakdown} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-8">
-            <div className="lg:col-span-2 bg-white rounded-xl shadow-md p-4 sm:p-6">
+            <div className="app-surface lg:col-span-2 bg-white rounded-xl shadow-md p-4 sm:p-6">
               <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Daily Spending Pattern</h3>
               <DailySpendingChart data={dailySpending?.dailyData || []} />
               {dailySpending && (
                 <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-4">
-                  <div className="bg-purple-50 rounded-lg p-3 sm:p-4">
-                    <p className="text-xs sm:text-sm text-purple-600 mb-1">Highest Spending Day</p>
-                    <p className="text-base sm:text-lg font-bold text-purple-800">{dailySpending.highestSpendingDay.day}</p>
-                    <p className="text-xs sm:text-sm text-purple-600">₹{Number(dailySpending?.highestSpendingDay?.amount ?? 0).toFixed(2)}</p>
+                  <div className="app-stat-tile rounded-lg p-3 sm:p-4">
+                    <p className="text-xs sm:text-sm mb-1">Highest Spending Day</p>
+                    <p className="text-base sm:text-lg font-bold">{dailySpending.highestSpendingDay.day}</p>
+                    <p className="text-xs sm:text-sm">₹{Number(dailySpending?.highestSpendingDay?.amount ?? 0).toFixed(2)}</p>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3 sm:p-4">
-                    <p className="text-xs sm:text-sm text-green-600 mb-1">Average Daily Spending</p>
-                    <p className="text-base sm:text-lg font-bold text-green-800">₹{Number(dailySpending?.averageDailySpending ?? 0).toFixed(2)}</p>
+                  <div className="app-stat-tile rounded-lg p-3 sm:p-4">
+                    <p className="text-xs sm:text-sm mb-1">Average Daily Spending</p>
+                    <p className="text-base sm:text-lg font-bold">₹{Number(dailySpending?.averageDailySpending ?? 0).toFixed(2)}</p>
                   </div>
                 </div>
               )}
