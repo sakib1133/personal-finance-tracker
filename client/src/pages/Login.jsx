@@ -19,104 +19,87 @@ export default function Login() {
     setLoading(true);
 
     const result = await login(email, password);
-    
+
     if (result.success) {
       navigate('/dashboard');
     } else {
       setError(result.error);
     }
-    
+
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8" style={{ backgroundColor: 'var(--bg-main)' }}>
-      <div className="max-w-md w-full">
-        <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
-            Mini Expense Tracker
-          </h1>
-          <p className="text-sm sm:text-base" style={{ color: 'var(--text-secondary)' }}>Sign in to your account</p>
-        </div>
+    <main className="login-page">
+      <section className="login-form-panel" aria-labelledby="login-title">
+        <div className="login-form-wrap">
+          <div className="login-heading">
+            <h2 id="login-title">Sign in</h2>
+          </div>
 
-        <div className="rounded-lg p-6 sm:p-8 shadow-lg" style={{ backgroundColor: 'var(--bg-card)' }}>
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+          <form onSubmit={handleSubmit} className="login-form">
             {error && (
-              <div className="p-3 rounded-md text-sm" style={{ backgroundColor: '#fee2e2', color: '#dc2626' }}>
-                {error}
+              <div className="login-error" role="alert">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M10 6.5v4M10 13.5h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                <span>{error}</span>
               </div>
             )}
 
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-                Email
-              </label>
+            <div className="login-field">
+              <label htmlFor="email">Email address</label>
               <input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-md border focus:outline-none focus:ring-2 text-sm"
-                style={{
-                  backgroundColor: 'var(--bg-input)',
-                  borderColor: 'var(--border-color)',
-                  color: 'var(--text-primary)'
-                }}
+                autoComplete="email"
+                className="login-input"
+                style={{ backgroundColor: '#f8faf9', borderColor: '#dce5df', color: '#172b24' }}
                 placeholder="you@example.com"
               />
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-                Password
-              </label>
+            <div className="login-field">
+              <label htmlFor="password">Password</label>
               <PasswordInput
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="••••••••"
+                className="login-input"
+                style={{ backgroundColor: '#f8faf9', borderColor: '#dce5df', color: '#172b24' }}
+                placeholder="Enter your password"
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2 sm:py-3 px-4 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
-              style={{ backgroundColor: 'var(--primary)', color: 'var(--primary-text)' }}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
+            <button type="submit" disabled={loading} className="login-submit">
+              <span>{loading ? 'Signing in...' : 'Sign in'}</span>
+              {!loading && (
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M4 10h12M10 4l6 6-6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
             </button>
           </form>
 
           {isInstallable && !isInstalled && (
-            <button
-              onClick={promptInstall}
-              className="w-full mt-4 py-2 sm:py-3 px-4 rounded-md font-medium transition-colors text-sm sm:text-base flex items-center justify-center gap-2"
-              style={{
-                backgroundColor: 'transparent',
-                border: '2px solid var(--primary)',
-                color: 'var(--primary)'
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
+            <button type="button" onClick={promptInstall} className="login-install">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Install App
+              Install app
             </button>
           )}
 
-          <p className="mt-4 sm:mt-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Don't have an account?{' '}
-            <Link to="/signup" className="font-medium hover:underline" style={{ color: 'var(--primary)' }}>
-              Sign up
-            </Link>
+          <p className="login-signup">
+            Don&apos;t have an account? <Link to="/signup">Create an account</Link>
           </p>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
