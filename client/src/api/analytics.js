@@ -1,21 +1,21 @@
 import api from './index';
 
-export const getAnalyticsSummary = async () => {
-  const response = await api.get('/analytics/summary');
+export const getAnalyticsSummary = async (dateRange) => {
+  const response = await api.get('/analytics/summary', { params: dateRange });
   return response.data;
 };
 
-export const getMonthlyTrends = async () => {
-  const response = await api.get('/analytics/monthly-trends');
+export const getMonthlyTrends = async (dateRange) => {
+  const response = await api.get('/analytics/monthly-trends', { params: dateRange });
   return response.data;
 };
 
-export const getCategoryBreakdown = async () => {
-  const response = await api.get('/analytics/category-breakdown');
+export const getCategoryBreakdown = async (dateRange) => {
+  const response = await api.get('/analytics/category-breakdown', { params: dateRange });
   return response.data;
 };
 
-export const getDailySpending = async () => {
-  const response = await api.get('/analytics/daily-spending');
+export const getDailySpending = async (dateRange) => {
+  const response = await api.get('/analytics/daily-spending', { params: dateRange });
   return response.data;
 };

@@ -19,7 +19,7 @@ services:
         generateValue: true
 
       - key: CORS_ORIGIN
-        value: "https://expense-tracker-o0ni.onrender.com"
+        value: "https://personal-finance-tracker-cyan-tau.vercel.app"
 
       - key: DATABASE_URL
         value: "postgresql://user:password@host/dbname?sslmode=require"

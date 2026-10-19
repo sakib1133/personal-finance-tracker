@@ -264,7 +264,7 @@ const isValidISODate = (dateValue) => {
   // Expect YYYY-MM-DD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
   const d = new Date(dateValue + 'T00:00:00Z');
-  return !Number.isNaN(d.getTime());
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === dateValue;
 };
 
 const isFutureDate = (dateValue) => {
@@ -273,6 +273,37 @@ const isFutureDate = (dateValue) => {
   // Compare only by date (UTC)
   const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   return d.getTime() > todayUTC.getTime();
+};
+
+const getAnalyticsDateRange = (req, res) => {
+  const { startDate, endDate } = req.query;
+
+  if (startDate === undefined && endDate === undefined) {
+    return null;
+  }
+
+  if (!isValidISODate(startDate) || !isValidISODate(endDate)) {
+    res.status(400).json({ error: 'Both startDate and endDate must use YYYY-MM-DD format' });
+    return undefined;
+  }
+
+  if (startDate > endDate) {
+    res.status(400).json({ error: 'startDate must be on or before endDate' });
+    return undefined;
+  }
+
+  return { startDate, endDate };
+};
+
+const getAnalyticsExpenses = (userId, dateRange) => {
+  if (!dateRange) {
+    return query('SELECT * FROM expenses WHERE user_id = $1', [userId]);
+  }
+
+  return query(
+    'SELECT * FROM expenses WHERE user_id = $1 AND date >= $2 AND date <= $3',
+    [userId, dateRange.startDate, dateRange.endDate]
+  );
 };
 
 app.post('/expenses', authenticateToken, async (req, res) => {
@@ -542,7 +573,10 @@ app.get('/health', (req, res) => {
 
 app.get('/analytics/summary', authenticateToken, async (req, res) => {
   try {
-    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);
+    const dateRange = getAnalyticsDateRange(req, res);
+    if (dateRange === undefined) return;
+
+    const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
 
     if (expenses.length === 0) {
       return res.json({
@@ -622,19 +656,29 @@ const lowestExpense = Math.min(
 
 app.get('/analytics/monthly-trends', authenticateToken, async (req, res) => {
   try {
-    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);
+    const dateRange = getAnalyticsDateRange(req, res);
+    if (dateRange === undefined) return;
+
+    const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
 
     const months = [];
     const now = new Date();
+    const startDate = dateRange
+      ? new Date(`${dateRange.startDate}T00:00:00Z`)
+      : new Date(Date.UTC(now.getFullYear(), now.getMonth() - 11, 1));
+    const endDate = dateRange
+      ? new Date(`${dateRange.endDate}T00:00:00Z`)
+      : new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
 
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const month = date.getMonth();
-      const year = date.getFullYear();
+    for (
+      let date = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
+      date <= endDate;
+      date.setUTCMonth(date.getUTCMonth() + 1)
+    ) {
+      const monthKey = date.toISOString().slice(0, 7);
 
       const monthExpenses = expenses.filter((exp) => {
-        const expDate = new Date(exp.date);
-        return expDate.getMonth() === month && expDate.getFullYear() === year;
+        return String(exp.date).slice(0, 7) === monthKey;
       });
 
       const totalSpending = monthExpenses.reduce(
@@ -642,9 +686,8 @@ app.get('/analytics/monthly-trends', authenticateToken, async (req, res) => {
         0
       );
 
-
       months.push({
-        month: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
+        month: date.toLocaleString('default', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
         totalSpending
       });
     }
@@ -658,7 +701,10 @@ app.get('/analytics/monthly-trends', authenticateToken, async (req, res) => {
 
 app.get('/analytics/category-breakdown', authenticateToken, async (req, res) => {
   try {
-    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);
+    const dateRange = getAnalyticsDateRange(req, res);
+    if (dateRange === undefined) return;
+
+    const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
 
     if (expenses.length === 0) {
       return res.json([]);
@@ -692,35 +738,49 @@ app.get('/analytics/category-breakdown', authenticateToken, async (req, res) => 
 
 app.get('/analytics/daily-spending', authenticateToken, async (req, res) => {
   try {
-    const expenses = await query('SELECT * FROM expenses WHERE user_id = $1', [req.user.id]);
+    const dateRange = getAnalyticsDateRange(req, res);
+    if (dateRange === undefined) return;
+
+    const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
 
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    const currentMonthExpenses = expenses.filter((exp) => {
-      const expDate = new Date(exp.date);
-      return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-    });
+    const rangeStart = dateRange
+      ? new Date(`${dateRange.startDate}T00:00:00Z`)
+      : new Date(Date.UTC(currentYear, currentMonth, 1));
+    const rangeEnd = dateRange
+      ? new Date(`${dateRange.endDate}T00:00:00Z`)
+      : new Date(Date.UTC(currentYear, currentMonth + 1, 0));
+    const currentMonthExpenses = dateRange
+      ? expenses
+      : expenses.filter((exp) => {
+          const expDate = new Date(exp.date);
+          return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
+        });
 
     const dailySpending = {};
     currentMonthExpenses.forEach((exp) => {
-      const expDate = new Date(exp.date);
-      const day = expDate.getDate();
-      if (!dailySpending[day]) {
-        dailySpending[day] = 0;
+      const dateKey = String(exp.date).slice(0, 10);
+      if (!dailySpending[dateKey]) {
+        dailySpending[dateKey] = 0;
       }
-      dailySpending[day] += toNumber(exp.amount);
-
+      dailySpending[dateKey] += toNumber(exp.amount);
     });
 
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const dailyData = [];
+    const daysInRange = Math.floor((rangeEnd - rangeStart) / (24 * 60 * 60 * 1000)) + 1;
 
-    for (let day = 1; day <= daysInMonth; day++) {
+    for (let dayOffset = 0; dayOffset < daysInRange; dayOffset++) {
+      const date = new Date(rangeStart);
+      date.setUTCDate(date.getUTCDate() + dayOffset);
+      const dateKey = date.toISOString().slice(0, 10);
       dailyData.push({
-        day: `Day ${day}`,
-        amount: dailySpending[day] || 0
+        day: dateRange
+          ? date.toLocaleDateString('default', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+          : `Day ${date.getUTCDate()}`,
+        amount: dailySpending[dateKey] || 0
       });
     }
 
@@ -731,7 +791,7 @@ app.get('/analytics/daily-spending', authenticateToken, async (req, res) => {
       ? currentMonthExpenses.reduce(
         (sum, exp) => sum + toNumber(exp.amount),
         0
-      ) / daysInMonth
+      ) / daysInRange
       : 0;
 
 

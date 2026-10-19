@@ -4,40 +4,56 @@ export default function AnalyticsFilter({ onFilterChange }) {
   const [selectedFilter, setSelectedFilter] = useState('Last 30 Days');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+  const [dateError, setDateError] = useState('');
 
   const filters = ['Last 7 Days', 'Last 30 Days', 'Last 3 Months', 'Last 6 Months', 'Last 12 Months', 'Custom'];
 
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const subtractMonths = (date, months) => {
+    const day = date.getDate();
+    date.setDate(1);
+    date.setMonth(date.getMonth() - months);
+    date.setDate(Math.min(day, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()));
+  };
+
   const handleFilterSelect = (filter) => {
     setSelectedFilter(filter);
-    
-    const now = new Date();
-    let startDate, endDate;
+
+    const endDate = new Date();
+    endDate.setHours(0, 0, 0, 0);
+    const startDate = new Date(endDate);
 
     switch (filter) {
       case 'Last 7 Days':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        endDate = now;
+        startDate.setDate(startDate.getDate() - 6);
         break;
       case 'Last 30 Days':
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        endDate = now;
+        startDate.setDate(startDate.getDate() - 29);
         break;
       case 'Last 3 Months':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
-        endDate = now;
+        subtractMonths(startDate, 3);
         break;
       case 'Last 6 Months':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-        endDate = now;
+        subtractMonths(startDate, 6);
         break;
       case 'Last 12 Months':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 12, now.getDate());
-        endDate = now;
+        subtractMonths(startDate, 12);
         break;
       case 'Custom':
         if (customStartDate && customEndDate) {
-          startDate = new Date(customStartDate);
-          endDate = new Date(customEndDate);
+          if (customStartDate > customEndDate) {
+            setDateError('Start date must be on or before end date');
+            return;
+          }
+          setDateError('');
+          onFilterChange({ startDate: customStartDate, endDate: customEndDate });
+          return;
         } else {
           return;
         }
@@ -46,7 +62,8 @@ export default function AnalyticsFilter({ onFilterChange }) {
         return;
     }
 
-    onFilterChange({ filter, startDate, endDate });
+    setDateError('');
+    onFilterChange({ startDate: formatDate(startDate), endDate: formatDate(endDate) });
   };
 
   const handleCustomDateChange = () => {
@@ -98,6 +115,7 @@ export default function AnalyticsFilter({ onFilterChange }) {
           </div>
         )}
       </div>
+      {dateError && <p className="mt-3 text-sm text-red-600">{dateError}</p>}
     </div>
   );
 }

@@ -16,6 +16,22 @@ import TopSpendingCategories from '../components/TopSpendingCategories';
 import SpendingStatistics from '../components/SpendingStatistics';
 import AnalyticsFilter from '../components/AnalyticsFilter';
 
+const getDefaultDateRange = () => {
+  const endDate = new Date();
+  endDate.setHours(0, 0, 0, 0);
+  const startDate = new Date(endDate);
+  startDate.setDate(startDate.getDate() - 29);
+
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  return { startDate: formatDate(startDate), endDate: formatDate(endDate) };
+};
+
 export default function Analytics() {
   const [summary, setSummary] = useState(null);
   const [monthlyTrends, setMonthlyTrends] = useState([]);
@@ -24,15 +40,16 @@ export default function Analytics() {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dateRange, setDateRange] = useState(getDefaultDateRange);
 
   useEffect(() => {
-    loadAnalyticsData();
+    loadAnalyticsData(dateRange);
 
     // Re-fetch data when the page becomes visible (tab switch, PWA resume)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         console.log('Analytics page became visible, refreshing data...');
-        loadAnalyticsData();
+        loadAnalyticsData(dateRange);
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
@@ -40,16 +57,16 @@ export default function Analytics() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []);
+  }, [dateRange]);
 
-  const loadAnalyticsData = async () => {
+  const loadAnalyticsData = async (selectedDateRange = dateRange) => {
     try {
       setLoading(true);
       const [summaryData, trendsData, categoryData, dailyData, expensesData] = await Promise.all([
-        getAnalyticsSummary(),
-        getMonthlyTrends(),
-        getCategoryBreakdown(),
-        getDailySpending(),
+        getAnalyticsSummary(selectedDateRange),
+        getMonthlyTrends(selectedDateRange),
+        getCategoryBreakdown(selectedDateRange),
+        getDailySpending(selectedDateRange),
         getExpenses()
       ]);
 
@@ -57,7 +74,10 @@ export default function Analytics() {
       setMonthlyTrends(trendsData);
       setCategoryBreakdown(categoryData);
       setDailySpending(dailyData);
-      setExpenses(expensesData);
+      setExpenses(expensesData.filter((expense) =>
+        expense.date >= selectedDateRange.startDate &&
+        expense.date <= selectedDateRange.endDate
+      ));
       setError(null);
     } catch (err) {
       console.error('Error loading analytics data:', err);
@@ -67,8 +87,8 @@ export default function Analytics() {
     }
   };
 
-  const handleFilterChange = ({ filter, startDate, endDate }) => {
-    console.log('Filter changed:', filter, startDate, endDate);
+  const handleFilterChange = (selectedDateRange) => {
+    setDateRange(selectedDateRange);
   };
 
   if (loading) {
@@ -88,7 +108,7 @@ export default function Analytics() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
           <p className="text-red-700 text-center">{error}</p>
           <button
-            onClick={loadAnalyticsData}
+            onClick={() => loadAnalyticsData()}
             className="mt-4 w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors"
           >
             Retry
