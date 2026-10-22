@@ -24,7 +24,7 @@ export default function Navbar() {
               </svg>
             </span>
             <h1 className="app-brand-title text-lg sm:text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-              Mini Expense Tracker
+              Welcome, {user?.fullName}
             </h1>
           </div>
 
@@ -46,9 +46,6 @@ export default function Navbar() {
 
           {/* Desktop User Info */}
           <div className="hidden md:flex items-center space-x-4">
-            <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-              Welcome, {user?.fullName}
-            </span>
             <button
               onClick={logout}
               className="px-4 py-2 rounded-md text-sm font-medium transition-colors"
@@ -127,9 +124,6 @@ export default function Navbar() {
               History
             </Link>
             <div className="border-t pt-3 mt-3" style={{ borderColor: 'var(--border)' }}>
-              <p className="px-3 py-2 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                Welcome, {user?.fullName}
-              </p>
               <button
                 onClick={() => {
                   logout();
