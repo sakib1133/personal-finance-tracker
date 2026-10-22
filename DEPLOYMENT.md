@@ -104,9 +104,9 @@ Set this separately in the Vercel project:
 VITE_API_URL=<Render API base URL>
 ```
 
-Signup requires a password with at least 12 characters, lowercase and uppercase
-letters, a number, and a symbol. Passwords are limited to 72 UTF-8 bytes for
-compatibility with bcrypt.
+Signup requires a password with at least 12 characters, a lowercase letter, a
+number, and a symbol. Uppercase letters are optional. Passwords are limited to
+72 UTF-8 bytes for compatibility with bcrypt.
 
 ---
 

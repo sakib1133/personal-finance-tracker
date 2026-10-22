@@ -19,7 +19,6 @@ export default function Signup() {
     { label: 'At least 12 characters', met: Array.from(password).length >= 12 },
     { label: 'No more than 72 UTF-8 bytes', met: new TextEncoder().encode(password).length <= 72 },
     { label: 'A lowercase letter', met: /[a-z]/.test(password) },
-    { label: 'An uppercase letter', met: /[A-Z]/.test(password) },
     { label: 'A number', met: /\d/.test(password) },
     { label: 'A symbol', met: /[^A-Za-z0-9]/.test(password) }
   ];
@@ -42,7 +41,7 @@ export default function Signup() {
     setError('');
 
     if (!isPasswordStrong) {
-      setError('Choose a strong password that meets all the requirements below');
+      setError('Use at least 12 characters, including a lowercase letter, a number, and a symbol');
       return;
     }
 
@@ -130,7 +129,7 @@ export default function Signup() {
                 minLength={12}
                 maxLength={72}
                 autoComplete="new-password"
-                ariaDescribedBy="password-strength password-requirements"
+                ariaDescribedBy="password-strength"
                 className="login-input"
                 style={{ backgroundColor: '#f8faf9', borderColor: '#dce5df', color: '#172b24' }}
                 placeholder="Create a password"
@@ -145,7 +144,7 @@ export default function Signup() {
                 <div
                   className="password-strength-meter"
                   role="progressbar"
-                  aria-label="Password strength"
+                  aria-label={`Password strength: ${strengthLabel}`}
                   aria-valuemin={0}
                   aria-valuemax={passwordRequirements.length}
                   aria-valuenow={passwordStrength}
@@ -153,14 +152,6 @@ export default function Signup() {
                   <span style={{ width: `${(passwordStrength / passwordRequirements.length) * 100}%` }} />
                 </div>
               </div>
-              <ul className="signup-password-requirements" id="password-requirements">
-                {passwordRequirements.map(({ label, met }) => (
-                  <li key={label} className={met ? 'is-met' : ''}>
-                    <span aria-hidden="true">{met ? '✓' : '○'}</span>
-                    {label}
-                  </li>
-                ))}
-              </ul>
             </div>
 
             <div className="login-field">

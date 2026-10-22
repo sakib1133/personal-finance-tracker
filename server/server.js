@@ -167,9 +167,9 @@ app.post('/auth/register', registerLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Password must be no more than 72 UTF-8 bytes' });
     }
 
-    if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    if (!/[a-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
       return res.status(400).json({
-        error: 'Password must include lowercase and uppercase letters, a number, and a symbol'
+        error: 'Password must include a lowercase letter, a number, and a symbol'
       });
     }
 

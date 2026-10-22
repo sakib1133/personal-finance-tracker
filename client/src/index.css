@@ -712,12 +712,6 @@ button {
   gap: 16px;
 }
 
-.signup-password-hint {
-  margin: -2px 0 0;
-  color: #728078;
-  font-size: 12px;
-}
-
 .signup-password-strength {
   margin-top: 8px;
   color: #728078;
@@ -766,27 +760,6 @@ button {
   border-radius: inherit;
   background: #237246;
   transition: width 160ms ease;
-}
-
-.signup-password-requirements {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px 10px;
-  margin: 8px 0 0;
-  padding: 0;
-  color: #728078;
-  font-size: 11px;
-  list-style: none;
-}
-
-.signup-password-requirements li {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.signup-password-requirements li.is-met {
-  color: #237246;
 }
 
 .login-security-note {
