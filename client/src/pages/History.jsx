@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getExpenses } from '../api/expenses';
-import ExpenseForm from '../components/ExpenseForm';
 import ExpenseTable from '../components/ExpenseTable';
 import ExportButton from '../components/ExportButton';
 import FilterBar from '../components/FilterBar';
@@ -43,9 +43,9 @@ const applyFilters = (expenses, filters) => {
 };
 
 export default function History() {
+  const navigate = useNavigate();
   const [expenses, setExpenses] = useState([]);
   const [activeFilters, setActiveFilters] = useState(DEFAULT_FILTERS);
-  const [editingExpense, setEditingExpense] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const { success, error: showError } = useToast();
@@ -78,20 +78,13 @@ export default function History() {
     };
   }, []);
 
-  const handleFormSubmit = async () => {
-    await loadExpenses();
-    success(editingExpense ? 'Expense updated successfully' : 'Expense added successfully');
-    setEditingExpense(null);
-  };
-
   const handleDelete = async () => {
     await loadExpenses();
     success('Expense deleted successfully');
   };
 
   const handleEdit = (expense) => {
-    setEditingExpense(expense);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate('/dashboard', { state: { editingExpense: expense } });
   };
 
   const handleDeleteError = (error) => {
@@ -112,12 +105,6 @@ export default function History() {
               Expense History
             </h1>
           </div>
-
-          <ExpenseForm
-            editingExpense={editingExpense}
-            onSubmit={handleFormSubmit}
-            onCancel={() => setEditingExpense(null)}
-          />
 
           {loadError && (
             <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert">

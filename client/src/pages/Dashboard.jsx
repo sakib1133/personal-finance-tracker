@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getExpenses } from '../api/expenses';
 import { getBudgets } from '../api/budgets';
+import ExpenseForm from '../components/ExpenseForm';
 import SummaryPanel from '../components/SummaryPanel';
 import ExpensePieChart from '../components/PieChart';
 import Navbar from '../components/Navbar';
@@ -9,10 +11,13 @@ import BudgetAlert from '../components/BudgetAlert';
 import { useToast } from '../context/ToastContext';
 
 export default function Dashboard() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
+  const [editingExpense, setEditingExpense] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { error: showError } = useToast();
+  const { success, error: showError } = useToast();
 
   useEffect(() => {
     loadData(true);
@@ -30,6 +35,14 @@ export default function Dashboard() {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
+
+  useEffect(() => {
+    if (location.state?.editingExpense) {
+      setEditingExpense(location.state.editingExpense);
+      navigate('/dashboard', { replace: true, state: null });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [location.state, navigate]);
 
   const loadData = async (showInitialLoading = false) => {
     try {
@@ -50,6 +63,13 @@ export default function Dashboard() {
         setLoading(false);
       }
     }
+  };
+
+  const handleFormSubmit = () => {
+    const wasEditing = Boolean(editingExpense);
+    loadData();
+    success(wasEditing ? 'Expense updated successfully' : 'Expense added successfully');
+    setEditingExpense(null);
   };
 
   const getCurrentMonthExpenses = () => {
@@ -114,6 +134,12 @@ export default function Dashboard() {
           <h1 className="app-page-title text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-4 sm:mb-8" style={{ color: 'var(--text-primary)' }}>
             Dashboard
           </h1>
+
+          <ExpenseForm
+            editingExpense={editingExpense}
+            onSubmit={handleFormSubmit}
+            onCancel={() => setEditingExpense(null)}
+          />
 
           {budgetAlerts.length > 0 && (
             <div className="mb-4 sm:mb-6">
