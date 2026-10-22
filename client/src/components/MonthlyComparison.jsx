@@ -3,11 +3,11 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export default function MonthlyComparison({ currentMonth, previousMonth }) {
-  const safeCurrentMonth = toNumber(currentMonth);
-  const safePreviousMonth = toNumber(previousMonth);
-  const difference = safeCurrentMonth - safePreviousMonth;
-  const percentage = safePreviousMonth > 0 ? ((difference / safePreviousMonth) * 100).toFixed(1) : null;
+export default function MonthlyComparison({ currentPeriod, previousPeriod }) {
+  const safeCurrentPeriod = toNumber(currentPeriod);
+  const safePreviousPeriod = toNumber(previousPeriod);
+  const difference = safeCurrentPeriod - safePreviousPeriod;
+  const percentage = safePreviousPeriod > 0 ? ((difference / safePreviousPeriod) * 100).toFixed(1) : null;
   const isIncrease = difference > 0;
   const isDecrease = difference < 0;
   const changeLabel = isIncrease ? 'Increase' : isDecrease ? 'Decrease' : 'No change';
@@ -30,17 +30,17 @@ export default function MonthlyComparison({ currentMonth, previousMonth }) {
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Monthly Comparison</h3>
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">Period Comparison</h3>
       
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <span className="text-gray-600">Current Month</span>
-          <span className="text-xl font-bold text-gray-800">₹{safeCurrentMonth.toFixed(2)}</span>
+          <span className="text-gray-600">Selected Period</span>
+          <span className="text-xl font-bold text-gray-800">₹{safeCurrentPeriod.toFixed(2)}</span>
         </div>
         
         <div className="flex justify-between items-center">
-          <span className="text-gray-600">Previous Month</span>
-          <span className="text-xl font-bold text-gray-800">₹{safePreviousMonth.toFixed(2)}</span>
+          <span className="text-gray-600">Previous Period</span>
+          <span className="text-xl font-bold text-gray-800">₹{safePreviousPeriod.toFixed(2)}</span>
         </div>
         
         <div className="border-t pt-4">
@@ -58,7 +58,7 @@ export default function MonthlyComparison({ currentMonth, previousMonth }) {
                 {changeIndicator} {percentage === null ? (isIncrease ? 'N/A' : '0.0%') : `${Math.abs(percentage)}%`}
               </span>
               <span className={`text-sm px-2 py-1 rounded-full ${changeBadgeColor}`}>
-                {safePreviousMonth === 0 && isIncrease ? 'New spending' : changeLabel}
+                {safePreviousPeriod === 0 && isIncrease ? 'New spending' : changeLabel}
               </span>
             </div>
           </div>

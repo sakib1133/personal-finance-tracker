@@ -332,6 +332,21 @@ const getMonthStartDate = (date, monthOffset = 0) => {
   return new Date(Date.UTC(year, month - 1 + monthOffset, 1)).toISOString().slice(0, 10);
 };
 
+const getPreviousDateRange = ({ startDate, endDate }) => {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const daysInRange = Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  const previousEnd = new Date(start);
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setUTCDate(previousStart.getUTCDate() - daysInRange + 1);
+
+  return {
+    startDate: previousStart.toISOString().slice(0, 10),
+    endDate: previousEnd.toISOString().slice(0, 10)
+  };
+};
+
 app.post('/expenses', authenticateToken, async (req, res) => {
   try {
     const { amount, category, date, note } = req.body;
@@ -606,7 +621,8 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
     const currentMonthStart = getMonthStartDate(now);
     const nextMonthStart = getMonthStartDate(now, 1);
     const previousMonthStart = getMonthStartDate(now, -1);
-    const [expenses, monthSpending] = await Promise.all([
+    const previousDateRange = dateRange ? getPreviousDateRange(dateRange) : null;
+    const [expenses, monthSpending, previousPeriodSpending] = await Promise.all([
       getAnalyticsExpenses(req.user.id, dateRange),
       queryOne(
         `SELECT
@@ -620,8 +636,18 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
           nextMonthStart,
           previousMonthStart
         ]
-      )
+      ),
+      previousDateRange
+        ? queryOne(
+            'SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = $1 AND date >= $2 AND date <= $3',
+            [req.user.id, previousDateRange.startDate, previousDateRange.endDate]
+          )
+        : Promise.resolve(null)
     ]);
+
+    const previousPeriodTotal = previousDateRange
+      ? toNumber(previousPeriodSpending.total)
+      : toNumber(monthSpending.previous_month_spending);
 
     if (expenses.length === 0) {
       return res.json({
@@ -631,7 +657,9 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
         lowestExpense: 0,
         mostUsedCategory: 'N/A',
         currentMonthSpending: toNumber(monthSpending.current_month_spending),
-        previousMonthSpending: toNumber(monthSpending.previous_month_spending)
+        previousMonthSpending: toNumber(monthSpending.previous_month_spending),
+        selectedPeriodSpending: 0,
+        previousPeriodSpending: previousPeriodTotal
       });
     }
 
@@ -665,7 +693,9 @@ const lowestExpense = Math.min(
       lowestExpense,
       mostUsedCategory,
       currentMonthSpending: toNumber(monthSpending.current_month_spending),
-      previousMonthSpending: toNumber(monthSpending.previous_month_spending)
+      previousMonthSpending: toNumber(monthSpending.previous_month_spending),
+      selectedPeriodSpending: totalExpenses,
+      previousPeriodSpending: previousPeriodTotal
     });
   } catch (error) {
     console.error('Analytics summary error:', error);

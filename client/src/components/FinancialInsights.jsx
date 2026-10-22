@@ -41,18 +41,6 @@ label: 'Most Used Category',
 value: d.mostUsedCategory || 'N/A',
 color: 'bg-yellow-500',
 icon: '🏷️'
-},
-{
-label: 'Current Month',
-value: `₹${safeToFixed(d.currentMonthSpending, 2)}`,
-color: 'bg-indigo-500',
-icon: '📅'
-},
-{
-label: 'Previous Month',
-value: `₹${safeToFixed(d.previousMonthSpending, 2)}`,
-color: 'bg-pink-500',
-icon: '📆'
 }
 ];
 

@@ -103,33 +103,6 @@ export default function Analytics() {
     setDateRange(selectedDateRange);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-main)' }}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p style={{ color: 'var(--text-secondary)' }}>Loading analytics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-main)' }}>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <p className="text-red-700 text-center">{error}</p>
-          <button
-            onClick={() => loadAnalyticsData()}
-            className="mt-4 w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-main)' }}>
       <Navbar />
@@ -142,53 +115,72 @@ export default function Analytics() {
 
           <AnalyticsFilter onFilterChange={handleFilterChange} />
 
-          <div className="mb-4 sm:mb-8">
-            <FinancialInsights data={summary} />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-8">
-            <div className="app-surface bg-white rounded-xl shadow-md p-4 sm:p-6">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Monthly Spending Trend</h3>
-              <MonthlyTrendChart data={monthlyTrends} />
+          {error ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
+              <p className="text-red-700 text-center">{error}</p>
+              <button
+                onClick={() => loadAnalyticsData()}
+                className="mt-4 w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Retry
+              </button>
             </div>
-
-            <div className="app-surface bg-white rounded-xl shadow-md p-4 sm:p-6">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Category Breakdown</h3>
-              <CategoryBreakdownChart data={categoryBreakdown} />
+          ) : loading ? (
+            <div className="py-12 text-center" role="status" aria-live="polite">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto mb-4"></div>
+              <p style={{ color: 'var(--text-secondary)' }}>Loading analytics...</p>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="mb-4 sm:mb-8">
+                <FinancialInsights data={summary} />
+              </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-8">
-            <div className="app-surface lg:col-span-2 bg-white rounded-xl shadow-md p-4 sm:p-6">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Daily Spending Pattern</h3>
-              <DailySpendingChart data={dailySpending?.dailyData || []} />
-              {dailySpending && (
-                <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-4">
-                  <div className="app-stat-tile rounded-lg p-3 sm:p-4">
-                    <p className="text-xs sm:text-sm mb-1">Highest Spending Day</p>
-                    <p className="text-base sm:text-lg font-bold">{dailySpending.highestSpendingDay.day}</p>
-                    <p className="text-xs sm:text-sm">₹{Number(dailySpending?.highestSpendingDay?.amount ?? 0).toFixed(2)}</p>
-                  </div>
-                  <div className="app-stat-tile rounded-lg p-3 sm:p-4">
-                    <p className="text-xs sm:text-sm mb-1">Average Daily Spending</p>
-                    <p className="text-base sm:text-lg font-bold">₹{Number(dailySpending?.averageDailySpending ?? 0).toFixed(2)}</p>
-                  </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-8">
+                <div className="app-surface bg-white rounded-xl shadow-md p-4 sm:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Monthly Spending Trend</h3>
+                  <MonthlyTrendChart data={monthlyTrends} />
                 </div>
-              )}
-            </div>
 
-            <div>
-              <MonthlyComparison
-                currentMonth={summary.currentMonthSpending}
-                previousMonth={summary.previousMonthSpending}
-              />
-            </div>
-          </div>
+                <div className="app-surface bg-white rounded-xl shadow-md p-4 sm:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Category Breakdown</h3>
+                  <CategoryBreakdownChart data={categoryBreakdown} />
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-8">
-            <TopSpendingCategories data={categoryBreakdown} />
-            <SpendingStatistics expenses={expenses} dateRange={dateRange} />
-          </div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-8">
+                <div className="app-surface lg:col-span-2 bg-white rounded-xl shadow-md p-4 sm:p-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">Daily Spending Pattern</h3>
+                  <DailySpendingChart data={dailySpending?.dailyData || []} />
+                  {dailySpending && (
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-4">
+                      <div className="app-stat-tile rounded-lg p-3 sm:p-4">
+                        <p className="text-xs sm:text-sm mb-1">Highest Spending Day</p>
+                        <p className="text-base sm:text-lg font-bold">{dailySpending.highestSpendingDay.day}</p>
+                        <p className="text-xs sm:text-sm">₹{Number(dailySpending?.highestSpendingDay?.amount ?? 0).toFixed(2)}</p>
+                      </div>
+                      <div className="app-stat-tile rounded-lg p-3 sm:p-4">
+                        <p className="text-xs sm:text-sm mb-1">Average Daily Spending</p>
+                        <p className="text-base sm:text-lg font-bold">₹{Number(dailySpending?.averageDailySpending ?? 0).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <MonthlyComparison
+                    currentPeriod={summary.selectedPeriodSpending}
+                    previousPeriod={summary.previousPeriodSpending}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-8">
+                <TopSpendingCategories data={categoryBreakdown} />
+                <SpendingStatistics expenses={expenses} dateRange={dateRange} />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
