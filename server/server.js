@@ -159,8 +159,9 @@ app.post('/auth/register', registerLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Passwords do not match' });
     }
 
-    if (Array.from(password).length < 12) {
-      return res.status(400).json({ error: 'Password must be at least 12 characters' });
+    const passwordLength = Array.from(password).length;
+    if (passwordLength < 6 || passwordLength > 15) {
+      return res.status(400).json({ error: 'Password must be between 6 and 15 characters' });
     }
 
     if (Buffer.byteLength(password, 'utf8') > 72) {
