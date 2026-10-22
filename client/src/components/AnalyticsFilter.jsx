@@ -84,13 +84,19 @@ export default function AnalyticsFilter({ onFilterChange }) {
             <button
               key={filter}
               onClick={() => handleFilterSelect(filter)}
+              aria-pressed={selectedFilter === filter}
+              style={{
+                color: selectedFilter === filter ? '#ffffff' : '#374151',
+                backgroundColor: selectedFilter === filter ? '#7c3aed' : '#f3f4f6',
+                whiteSpace: 'nowrap'
+              }}
               className={`px-4 py-2 rounded-lg font-medium transition-all ${
                 selectedFilter === filter
                   ? 'bg-purple-600 text-white shadow-md'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              {filter}
+              <span>{filter}</span>
             </button>
           ))}
         </div>
