@@ -6,7 +6,7 @@ export default function AnalyticsFilter({ onFilterChange }) {
   const [customEndDate, setCustomEndDate] = useState('');
   const [dateError, setDateError] = useState('');
 
-  const filters = ['Last 7 Days', 'Last 30 Days', 'Last 3 Months', 'Last 6 Months', 'Last 12 Months', 'Custom'];
+  const filters = ['Last 7 Days', 'Last 30 Days', 'Last Month', 'Last 3 Months', 'Last 6 Months', 'Last 12 Months', 'Custom'];
 
   const formatDate = (date) => {
     const year = date.getFullYear();
@@ -27,7 +27,7 @@ export default function AnalyticsFilter({ onFilterChange }) {
 
     const endDate = new Date();
     endDate.setHours(0, 0, 0, 0);
-    const startDate = new Date(endDate);
+    let startDate = new Date(endDate);
 
     switch (filter) {
       case 'Last 7 Days':
@@ -35,6 +35,10 @@ export default function AnalyticsFilter({ onFilterChange }) {
         break;
       case 'Last 30 Days':
         startDate.setDate(startDate.getDate() - 29);
+        break;
+      case 'Last Month':
+        startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 1, 1);
+        endDate.setDate(0);
         break;
       case 'Last 3 Months':
         subtractMonths(startDate, 3);
