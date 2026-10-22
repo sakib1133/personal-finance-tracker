@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   getAnalyticsSummary,
   getMonthlyTrends,
@@ -41,6 +41,7 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dateRange, setDateRange] = useState(getDefaultDateRange);
+  const requestId = useRef(0);
 
   useEffect(() => {
     loadAnalyticsData(dateRange);
@@ -56,10 +57,12 @@ export default function Analytics() {
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
+      requestId.current += 1;
     };
   }, [dateRange]);
 
   const loadAnalyticsData = async (selectedDateRange = dateRange) => {
+    const activeRequestId = ++requestId.current;
     try {
       setLoading(true);
       const [summaryData, trendsData, categoryData, dailyData, expensesData] = await Promise.all([
@@ -69,6 +72,10 @@ export default function Analytics() {
         getDailySpending(selectedDateRange),
         getExpenses()
       ]);
+
+      if (activeRequestId !== requestId.current) {
+        return;
+      }
 
       setSummary(summaryData);
       setMonthlyTrends(trendsData);
@@ -80,10 +87,15 @@ export default function Analytics() {
       ));
       setError(null);
     } catch (err) {
+      if (activeRequestId !== requestId.current) {
+        return;
+      }
       console.error('Error loading analytics data:', err);
       setError('Failed to load analytics data. Please try again.');
     } finally {
-      setLoading(false);
+      if (activeRequestId === requestId.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -175,7 +187,7 @@ export default function Analytics() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-8">
             <TopSpendingCategories data={categoryBreakdown} />
-            <SpendingStatistics expenses={expenses} dailySpendingData={dailySpending} />
+            <SpendingStatistics expenses={expenses} dateRange={dateRange} />
           </div>
         </div>
       </div>

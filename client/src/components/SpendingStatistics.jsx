@@ -3,7 +3,7 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export default function SpendingStatistics({ expenses, dailySpendingData }) {
+export default function SpendingStatistics({ expenses, dateRange }) {
   if (!expenses || expenses.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-md p-6">
@@ -16,27 +16,13 @@ export default function SpendingStatistics({ expenses, dailySpendingData }) {
   const totalExpensesCount = expenses.length;
   const totalAmount = expenses.reduce((sum, exp) => sum + toNumber(exp.amount), 0);
   
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  
-  const currentMonthExpenses = expenses.filter(exp => {
-    const expDate = new Date(exp.date);
-    return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-  });
-  
-  const currentMonthTotal = currentMonthExpenses.reduce((sum, exp) => sum + toNumber(exp.amount), 0);
-  const averageDailySpending = currentMonthTotal / daysInMonth;
-  
-  const monthsWithData = new Set(
-    expenses.map(exp => {
-      const expDate = new Date(exp.date);
-      return `${expDate.getFullYear()}-${expDate.getMonth()}`;
-    })
-  ).size;
-  
-  const averageMonthlySpending = monthsWithData > 0 ? totalAmount / monthsWithData : 0;
+  const start = new Date(`${dateRange.startDate}T00:00:00Z`);
+  const end = new Date(`${dateRange.endDate}T00:00:00Z`);
+  const daysInRange = Math.floor((end - start) / (24 * 60 * 60 * 1000)) + 1;
+  const monthsInRange = (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+    end.getUTCMonth() - start.getUTCMonth() + 1;
+  const averageDailySpending = daysInRange > 0 ? totalAmount / daysInRange : 0;
+  const averageMonthlySpending = monthsInRange > 0 ? totalAmount / monthsInRange : 0;
   
   const numericAmounts = expenses.map(exp => toNumber(exp.amount));
   const largestExpense = Math.max(...numericAmounts);
@@ -50,13 +36,13 @@ export default function SpendingStatistics({ expenses, dailySpendingData }) {
       color: 'bg-blue-100 text-blue-700'
     },
     {
-      label: 'Average Daily Spending',
+      label: 'Average Daily Spending (selected range)',
       value: `₹${averageDailySpending.toFixed(2)}`,
       icon: '📅',
       color: 'bg-green-100 text-green-700'
     },
     {
-      label: 'Average Monthly Spending',
+      label: 'Average Monthly Spending (selected range)',
       value: `₹${averageMonthlySpending.toFixed(2)}`,
       icon: '📊',
       color: 'bg-purple-100 text-purple-700'

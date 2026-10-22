@@ -306,6 +306,17 @@ const getAnalyticsExpenses = (userId, dateRange) => {
   );
 };
 
+const getMonthStartDate = (date, monthOffset = 0) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit'
+  }).formatToParts(date);
+  const year = Number(parts.find((part) => part.type === 'year').value);
+  const month = Number(parts.find((part) => part.type === 'month').value);
+  return new Date(Date.UTC(year, month - 1 + monthOffset, 1)).toISOString().slice(0, 10);
+};
+
 app.post('/expenses', authenticateToken, async (req, res) => {
   try {
     const { amount, category, date, note } = req.body;
@@ -576,7 +587,26 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
     const dateRange = getAnalyticsDateRange(req, res);
     if (dateRange === undefined) return;
 
-    const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
+    const now = new Date();
+    const currentMonthStart = getMonthStartDate(now);
+    const nextMonthStart = getMonthStartDate(now, 1);
+    const previousMonthStart = getMonthStartDate(now, -1);
+    const [expenses, monthSpending] = await Promise.all([
+      getAnalyticsExpenses(req.user.id, dateRange),
+      queryOne(
+        `SELECT
+          COALESCE(SUM(amount) FILTER (WHERE date >= $2 AND date < $3), 0) AS current_month_spending,
+          COALESCE(SUM(amount) FILTER (WHERE date >= $4 AND date < $2), 0) AS previous_month_spending
+        FROM expenses
+        WHERE user_id = $1 AND date >= $4 AND date < $3`,
+        [
+          req.user.id,
+          currentMonthStart,
+          nextMonthStart,
+          previousMonthStart
+        ]
+      )
+    ]);
 
     if (expenses.length === 0) {
       return res.json({
@@ -585,8 +615,8 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
         highestSingleExpense: 0,
         lowestExpense: 0,
         mostUsedCategory: 'N/A',
-        currentMonthSpending: 0,
-        previousMonthSpending: 0
+        currentMonthSpending: toNumber(monthSpending.current_month_spending),
+        previousMonthSpending: toNumber(monthSpending.previous_month_spending)
       });
     }
 
@@ -613,40 +643,14 @@ const lowestExpense = Math.min(
     });
     const mostUsedCategory = Object.entries(categoryCount).sort((a, b) => b[1] - a[1])[0][0];
 
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-    const previousMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-
-    const currentMonthExpenses = expenses.filter((exp) => {
-      const expDate = new Date(exp.date);
-      return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-    });
-
-   const currentMonthSpending = currentMonthExpenses.reduce(
-  (sum, exp) => sum + toNumber(exp.amount),
-  0
-);
-
-    const previousMonthExpenses = expenses.filter((exp) => {
-      const expDate = new Date(exp.date);
-      return expDate.getMonth() === previousMonth && expDate.getFullYear() === previousMonthYear;
-    });
-    const previousMonthSpending = previousMonthExpenses.reduce(
-      (sum, exp) => sum + toNumber(exp.amount),
-      0
-    );
-
-
     res.json({
       totalExpenses,
       averageExpenseAmount: parseFloat(averageExpenseAmount.toFixed(2)),
       highestSingleExpense,
       lowestExpense,
       mostUsedCategory,
-      currentMonthSpending,
-      previousMonthSpending
+      currentMonthSpending: toNumber(monthSpending.current_month_spending),
+      previousMonthSpending: toNumber(monthSpending.previous_month_spending)
     });
   } catch (error) {
     console.error('Analytics summary error:', error);
