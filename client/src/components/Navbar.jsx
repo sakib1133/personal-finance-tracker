@@ -39,6 +39,9 @@ export default function Navbar() {
             <Link to="/budgets" className={navLinkClass('/budgets')}>
               Budgets
             </Link>
+            <Link to="/history" className={navLinkClass('/history')}>
+              History
+            </Link>
           </div>
 
           {/* Desktop User Info */}
@@ -115,6 +118,13 @@ export default function Navbar() {
               onClick={() => setIsMenuOpen(false)}
             >
               Budgets
+            </Link>
+            <Link
+              to="/history"
+              className={navLinkClass('/history')}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              History
             </Link>
             <div className="border-t pt-3 mt-3" style={{ borderColor: 'var(--border)' }}>
               <p className="px-3 py-2 text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>

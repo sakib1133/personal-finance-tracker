@@ -6,6 +6,7 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Budgets from './pages/Budgets';
 import Analytics from './pages/Analytics';
+import History from './pages/History';
 import ProtectedRoute from './components/ProtectedRoute';
 import PWAUpdateNotification from './components/PWAUpdateNotification';
 
@@ -30,6 +31,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Analytics />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <History />
                 </ProtectedRoute>
               }
             />

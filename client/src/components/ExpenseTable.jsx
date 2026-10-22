@@ -5,14 +5,14 @@ const parsed = Number(value);
 return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export default function ExpenseTable({ expenses, onEdit, onDelete }) {
+export default function ExpenseTable({ expenses, onEdit, onDelete, onDeleteError }) {
 const handleDelete = async (id) => {
 if (window.confirm('Are you sure you want to delete this expense?')) {
 try {
 await deleteExpense(id);
-onDelete();
+await onDelete();
 } catch (error) {
-console.error('Error deleting expense:', error);
+onDeleteError(error);
 }
 }
 };
