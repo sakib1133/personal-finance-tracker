@@ -85,6 +85,11 @@ git push origin main
 
 ## 🔐 Environment Variables
 
+Set `VITE_API_URL` in the Vercel project to the deployed Render API base URL
+(for example, `https://your-api-service.onrender.com`, without a trailing slash).
+Local development can leave it unset because Vite proxies API requests to
+`http://localhost:5001`.
+
 ```env
 NODE_ENV=production
 PORT=10000
@@ -92,6 +97,16 @@ DATABASE_URL=<Neon Connection String>
 JWT_SECRET=<Strong Secret>
 CORS_ORIGIN=<Frontend URL>
 ```
+
+Set this separately in the Vercel project:
+
+```env
+VITE_API_URL=<Render API base URL>
+```
+
+Signup requires a password with at least 12 characters, lowercase and uppercase
+letters, a number, and a symbol. Passwords are limited to 72 UTF-8 bytes for
+compatibility with bcrypt.
 
 ---
 

@@ -6,6 +6,9 @@ export default function PasswordInput({
   onChange,
   required = false,
   minLength,
+  maxLength,
+  autoComplete,
+  ariaDescribedBy,
   placeholder = '••••••••',
   className = '',
   style = {}
@@ -32,6 +35,9 @@ export default function PasswordInput({
         onChange={onChange}
         required={required}
         minLength={minLength}
+        maxLength={maxLength}
+        autoComplete={autoComplete}
+        aria-describedby={ariaDescribedBy}
         placeholder={placeholder}
         className={`w-full px-3 sm:px-4 py-2 sm:py-3 rounded-md border focus:outline-none focus:ring-2 text-sm pr-16 ${className}`}
         style={{

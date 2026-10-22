@@ -3,6 +3,14 @@ import { login, register, getCurrentUser } from '../api/auth';
 
 const AuthContext = createContext(null);
 
+const getAuthErrorMessage = (error, fallback) => (
+  error.response?.data?.error ||
+  (error.request
+    ? 'Unable to reach the API server. Check that the backend is running and VITE_API_URL is correct.'
+    : error.message) ||
+  fallback
+);
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -42,7 +50,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.error || 'Login failed'
+        error: getAuthErrorMessage(error, 'Login failed')
       };
     }
   };
@@ -57,7 +65,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.error || 'Registration failed'
+        error: getAuthErrorMessage(error, 'Registration failed')
       };
     }
   };

@@ -15,31 +15,55 @@ export default function Signup() {
   const navigate = useNavigate();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
 
+  const passwordRequirements = [
+    { label: 'At least 12 characters', met: Array.from(password).length >= 12 },
+    { label: 'No more than 72 UTF-8 bytes', met: new TextEncoder().encode(password).length <= 72 },
+    { label: 'A lowercase letter', met: /[a-z]/.test(password) },
+    { label: 'An uppercase letter', met: /[A-Z]/.test(password) },
+    { label: 'A number', met: /\d/.test(password) },
+    { label: 'A symbol', met: /[^A-Za-z0-9]/.test(password) }
+  ];
+  const passwordStrength = password
+    ? passwordRequirements.filter(({ met }) => met).length
+    : 0;
+  const isPasswordStrong = passwordStrength === passwordRequirements.length;
+  const strengthLabel = !password
+    ? 'Not entered'
+    : isPasswordStrong
+      ? 'Strong'
+      : passwordStrength >= 4
+        ? 'Good'
+        : passwordStrength >= 2
+          ? 'Fair'
+          : 'Weak';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!isPasswordStrong) {
+      setError('Choose a strong password that meets all the requirements below');
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-
     setLoading(true);
 
-    const result = await register(fullName, email, password, confirmPassword);
-    
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.error);
+    try {
+      const result = await register(fullName, email, password, confirmPassword);
+
+      if (result.success) {
+        navigate('/dashboard');
+      } else {
+        setError(result.error);
+      }
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
@@ -103,14 +127,40 @@ export default function Signup() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={8}
+                minLength={12}
+                maxLength={72}
+                autoComplete="new-password"
+                ariaDescribedBy="password-strength password-requirements"
                 className="login-input"
                 style={{ backgroundColor: '#f8faf9', borderColor: '#dce5df', color: '#172b24' }}
                 placeholder="Create a password"
               />
-              <p className="signup-password-hint">
-                Must be at least 8 characters
-              </p>
+              <div className="signup-password-strength" id="password-strength" aria-live="polite">
+                <div className="password-strength-label">
+                  <span>Password strength</span>
+                  <strong className={`password-strength-${strengthLabel.toLowerCase().replace(' ', '-')}`}>
+                    {strengthLabel}
+                  </strong>
+                </div>
+                <div
+                  className="password-strength-meter"
+                  role="progressbar"
+                  aria-label="Password strength"
+                  aria-valuemin={0}
+                  aria-valuemax={passwordRequirements.length}
+                  aria-valuenow={passwordStrength}
+                >
+                  <span style={{ width: `${(passwordStrength / passwordRequirements.length) * 100}%` }} />
+                </div>
+              </div>
+              <ul className="signup-password-requirements" id="password-requirements">
+                {passwordRequirements.map(({ label, met }) => (
+                  <li key={label} className={met ? 'is-met' : ''}>
+                    <span aria-hidden="true">{met ? '✓' : '○'}</span>
+                    {label}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className="login-field">
@@ -122,7 +172,9 @@ export default function Signup() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={8}
+                minLength={12}
+                maxLength={72}
+                autoComplete="new-password"
                 className="login-input"
                 style={{ backgroundColor: '#f8faf9', borderColor: '#dce5df', color: '#172b24' }}
                 placeholder="Re-enter your password"

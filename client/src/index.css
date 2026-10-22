@@ -718,6 +718,77 @@ button {
   font-size: 12px;
 }
 
+.signup-password-strength {
+  margin-top: 8px;
+  color: #728078;
+  font-size: 12px;
+}
+
+.password-strength-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.signup-password-strength strong {
+  font-weight: 700;
+}
+
+.password-strength-weak {
+  color: #b42318;
+}
+
+.password-strength-fair {
+  color: #a15c00;
+}
+
+.password-strength-good,
+.password-strength-strong {
+  color: #237246;
+}
+
+.password-strength-not-entered {
+  color: #728078;
+}
+
+.password-strength-meter {
+  height: 4px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6ece8;
+}
+
+.password-strength-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #237246;
+  transition: width 160ms ease;
+}
+
+.signup-password-requirements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  color: #728078;
+  font-size: 11px;
+  list-style: none;
+}
+
+.signup-password-requirements li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.signup-password-requirements li.is-met {
+  color: #237246;
+}
+
 .login-security-note {
   display: none;
 }

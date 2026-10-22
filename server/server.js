@@ -151,12 +151,26 @@ app.post('/auth/register', registerLimiter, async (req, res) => {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
+    if (typeof password !== 'string') {
+      return res.status(400).json({ error: 'Password must be text' });
+    }
+
     if (password !== confirmPassword) {
       return res.status(400).json({ error: 'Passwords do not match' });
     }
 
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (Array.from(password).length < 12) {
+      return res.status(400).json({ error: 'Password must be at least 12 characters' });
+    }
+
+    if (Buffer.byteLength(password, 'utf8') > 72) {
+      return res.status(400).json({ error: 'Password must be no more than 72 UTF-8 bytes' });
+    }
+
+    if (!/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      return res.status(400).json({
+        error: 'Password must include lowercase and uppercase letters, a number, and a symbol'
+      });
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
