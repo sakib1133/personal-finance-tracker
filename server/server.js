@@ -106,6 +106,7 @@ app.use((req, res, next) => {
     req.path.startsWith('/api/') ||
     req.path.startsWith('/expenses') ||
     req.path.startsWith('/budgets') ||
+    req.path.startsWith('/analytics') ||
     req.path.startsWith('/auth')
   ) {
     res.set({

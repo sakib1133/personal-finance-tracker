@@ -42,6 +42,7 @@ export default function Analytics() {
   const [error, setError] = useState(null);
   const [dateRange, setDateRange] = useState(getDefaultDateRange);
   const requestId = useRef(0);
+  const hasLoadedData = useRef(false);
 
   useEffect(() => {
     loadAnalyticsData(dateRange);
@@ -64,7 +65,9 @@ export default function Analytics() {
   const loadAnalyticsData = async (selectedDateRange = dateRange) => {
     const activeRequestId = ++requestId.current;
     try {
-      setLoading(true);
+      if (!hasLoadedData.current) {
+        setLoading(true);
+      }
       const [summaryData, trendsData, categoryData, dailyData, expensesData] = await Promise.all([
         getAnalyticsSummary(selectedDateRange),
         getMonthlyTrends(selectedDateRange),
@@ -85,6 +88,7 @@ export default function Analytics() {
         expense.date >= selectedDateRange.startDate &&
         expense.date <= selectedDateRange.endDate
       ));
+      hasLoadedData.current = true;
       setError(null);
     } catch (err) {
       if (activeRequestId !== requestId.current) {
@@ -115,7 +119,7 @@ export default function Analytics() {
 
           <AnalyticsFilter onFilterChange={handleFilterChange} />
 
-          {error ? (
+          {error && !hasLoadedData.current ? (
             <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
               <p className="text-red-700 text-center">{error}</p>
               <button
@@ -132,6 +136,15 @@ export default function Analytics() {
             </div>
           ) : (
             <>
+              {error && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert">
+                  <p>{error}</p>
+                  <button onClick={() => loadAnalyticsData()} className="mt-2 font-semibold underline">
+                    Retry
+                  </button>
+                </div>
+              )}
+
               <div className="mb-4 sm:mb-8">
                 <FinancialInsights data={summary} />
               </div>
