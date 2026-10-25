@@ -1,5 +1,7 @@
 import api from './index';
 
+let currentUserRequest;
+
 export const register = async (userData) => {
   const response = await api.post('/auth/register', userData);
   return response.data;
@@ -21,8 +23,23 @@ export const signupWithGoogle = async (credential) => {
 };
 
 export const getCurrentUser = async () => {
-  const response = await api.get('/auth/me');
-  return response.data;
+  if (!currentUserRequest) {
+    currentUserRequest = api.get('/auth/me')
+      .then((response) => response.data)
+      .catch((error) => {
+        if (error.response?.status === 401) {
+          return null;
+        }
+
+        console.error('Failed to initialize the authentication session:', error);
+        throw error;
+      })
+      .finally(() => {
+        currentUserRequest = null;
+      });
+  }
+
+  return currentUserRequest;
 };
 
 export const logout = async () => {

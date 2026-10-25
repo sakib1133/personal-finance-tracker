@@ -36,6 +36,16 @@ database.query = async (text, values = []) => {
     sessions.set(values[0], { id: values[0], user_id: values[1], expires_at: values[2] });
     return [];
   }
+  if (text.includes('INSERT INTO users')) {
+    usersByEmail.set(values[2], {
+      id: values[0],
+      name: values[1],
+      email: values[2],
+      password: values[3],
+      google_sub: null
+    });
+    return [];
+  }
   if (text.includes('DELETE FROM auth_sessions')) {
     sessions.delete(values[0]);
     return [];
@@ -151,6 +161,26 @@ test('email/password login issues an HttpOnly session cookie and logout revokes 
   assert.equal(revokedResponse.status, 401);
 });
 
+test('manual signup creates a password account and establishes a session', async () => {
+  const response = await fetch(`${baseUrl}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fullName: 'New User',
+      email: 'new-user@example.com',
+      password: 'a-secure-password',
+      confirmPassword: 'a-secure-password'
+    })
+  });
+
+  assert.equal(response.status, 201);
+  const responseBody = await response.json();
+  assert.equal(responseBody.user.email, 'new-user@example.com');
+  assert.equal(responseBody.token, undefined);
+  assert.notEqual(usersByEmail.get('new-user@example.com').password, 'a-secure-password');
+  assert.match(response.headers.get('set-cookie'), /HttpOnly/i);
+});
+
 test('Google sign-in rejects an unregistered account without creating it', async () => {
   addGoogleProfile('new-google-user', {
     sub: 'google-sub-new',
@@ -233,6 +263,13 @@ test('invalid session tokens are rejected', async () => {
     headers: { Cookie: 'pft_session=not-a-valid-token' }
   });
   assert.equal(response.status, 401);
+  assert.match(response.headers.get('set-cookie'), /pft_session=;/);
+});
+
+test('the current-user route returns unauthorized when no session cookie is present', async () => {
+  const response = await fetch(`${baseUrl}/auth/me`);
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: 'Access token required' });
 });
 
 test('protected finance routes reject requests without a session cookie', async () => {

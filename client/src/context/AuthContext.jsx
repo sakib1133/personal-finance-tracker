@@ -23,20 +23,36 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    localStorage.removeItem('token');
-    fetchCurrentUser();
-  }, []);
+    let isActive = true;
 
-  const fetchCurrentUser = async () => {
+    const initializeAuth = async () => {
+      try {
+        const userData = await getCurrentUser();
+        if (isActive) {
+          setUser(userData);
+        }
+      } catch {
+        if (isActive) {
+          setUser(null);
+        }
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
     try {
-      const userData = await getCurrentUser();
-      setUser(userData);
+      localStorage.removeItem('token');
     } catch (error) {
-      setUser(null);
-    } finally {
-      setLoading(false);
+      console.error('Failed to remove a legacy authentication token:', error);
     }
-  };
+    initializeAuth();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const handleLogin = async (email, password) => {
     try {

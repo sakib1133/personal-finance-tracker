@@ -183,6 +183,7 @@ const authenticateToken = (req, res, next) => {
   try {
     payload = verifySessionToken(token, JWT_SECRET);
   } catch {
+    clearSessionCookie(res);
     return res.status(401).json({ error: 'Invalid or expired session' });
   }
 

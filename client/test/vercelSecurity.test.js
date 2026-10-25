@@ -19,5 +19,9 @@ test('Vercel configurations proxy the API and define restrictive browser headers
     assert.match(csp, /default-src 'self'/);
     assert.match(csp, /object-src 'none'/);
     assert.match(csp, /frame-ancestors 'none'/);
+    assert.match(csp, /style-src 'self' 'unsafe-inline' https:\/\/accounts\.google\.com/);
+    assert.match(csp, /script-src 'self' https:\/\/accounts\.google\.com/);
+    assert.match(csp, /frame-src https:\/\/accounts\.google\.com/);
+    assert.doesNotMatch(csp, /style-src [^;]*\*/);
   }
 });
