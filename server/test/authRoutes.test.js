@@ -2,10 +2,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
 const bcrypt = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
 
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = randomBytes(32).toString('hex');
-process.env.GOOGLE_CLIENT_ID = '';
+process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';
+
+const googleProfiles = new Map();
+OAuth2Client.prototype.verifyIdToken = async ({ idToken, audience }) => {
+  const payload = googleProfiles.get(idToken);
+  if (!payload || audience !== process.env.GOOGLE_CLIENT_ID) {
+    throw new Error('Invalid test Google credential');
+  }
+  return { getPayload: () => payload };
+};
 
 const database = require('../db');
 const user = {
@@ -15,6 +25,9 @@ const user = {
   password: bcrypt.hashSync('correct-password', 4)
 };
 const sessions = new Map();
+const usersByGoogleSub = new Map();
+const usersByEmail = new Map([[user.email, user]]);
+const googleUsersCreated = [];
 let expenseSelectCount = 0;
 let expenseInsertCount = 0;
 
@@ -41,11 +54,27 @@ database.queryOne = async (text, values = []) => {
       ? session
       : undefined;
   }
+  if (text.includes('INSERT INTO users') && text.includes('google_sub')) {
+    const createdUser = {
+      id: values[0],
+      name: values[1],
+      email: values[2],
+      password: null,
+      google_sub: values[3]
+    };
+    usersByGoogleSub.set(createdUser.google_sub, createdUser);
+    usersByEmail.set(createdUser.email, createdUser);
+    googleUsersCreated.push(createdUser);
+    return createdUser;
+  }
+  if (text.includes('FROM users') && text.includes('google_sub = $1')) {
+    return usersByGoogleSub.get(values[0]);
+  }
   if (text.includes('FROM users') && text.includes('LOWER(BTRIM(email))')) {
-    return user;
+    return usersByEmail.get(values[0]);
   }
   if (text.includes('FROM users') && text.includes('WHERE id = $1')) {
-    return user;
+    return [...usersByEmail.values()].find((candidate) => candidate.id === values[0]);
   }
   if (text.includes('FROM expenses')) {
     expenseSelectCount += 1;
@@ -60,6 +89,22 @@ database.queryOne = async (text, values = []) => {
 const { app } = require('../server');
 let server;
 let baseUrl;
+
+const addGoogleProfile = (credential, { sub, email, name = 'Google User' }) => {
+  googleProfiles.set(credential, {
+    aud: process.env.GOOGLE_CLIENT_ID,
+    email_verified: true,
+    sub,
+    email,
+    name
+  });
+};
+
+const googleRequest = (path, credential) => fetch(`${baseUrl}${path}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ credential })
+});
 
 test.before(async () => {
   server = app.listen(0, '127.0.0.1');
@@ -104,6 +149,83 @@ test('email/password login issues an HttpOnly session cookie and logout revokes 
     headers: { Cookie: cookiePair }
   });
   assert.equal(revokedResponse.status, 401);
+});
+
+test('Google sign-in rejects an unregistered account without creating it', async () => {
+  addGoogleProfile('new-google-user', {
+    sub: 'google-sub-new',
+    email: 'new-google@example.com'
+  });
+
+  const beforeCount = googleUsersCreated.length;
+  const response = await googleRequest('/auth/google', 'new-google-user');
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), {
+    error: 'No account found. Please sign up first.'
+  });
+  assert.equal(googleUsersCreated.length, beforeCount);
+  assert.equal(response.headers.getSetCookie().length, 0);
+});
+
+test('Google signup creates an account and establishes a secure session', async () => {
+  addGoogleProfile('google-signup-user', {
+    sub: 'google-sub-signup',
+    email: 'google-signup@example.com',
+    name: 'Signup User'
+  });
+
+  const response = await googleRequest('/auth/google/signup', 'google-signup-user');
+  assert.equal(response.status, 200);
+  const responseBody = await response.json();
+  assert.equal(responseBody.user.email, 'google-signup@example.com');
+  assert.equal(
+    [...usersByGoogleSub.values()].filter((candidate) => candidate.google_sub === 'google-sub-signup').length,
+    1
+  );
+
+  const cookie = response.headers.getSetCookie()[0];
+  assert.match(cookie, /HttpOnly/i);
+  assert.match(cookie, /SameSite=Lax/i);
+
+  const signInResponse = await googleRequest('/auth/google', 'google-signup-user');
+  assert.equal(signInResponse.status, 200);
+  assert.equal((await signInResponse.json()).user.email, 'google-signup@example.com');
+});
+
+test('Google signup does not duplicate an existing Google account', async () => {
+  addGoogleProfile('existing-google-user', {
+    sub: 'google-sub-existing',
+    email: 'google-existing@example.com'
+  });
+  const signupResponse = await googleRequest('/auth/google/signup', 'existing-google-user');
+  assert.equal(signupResponse.status, 200);
+  const userId = (await signupResponse.json()).user.id;
+  const beforeCount = googleUsersCreated.length;
+
+  const signInResponse = await googleRequest('/auth/google', 'existing-google-user');
+  assert.equal(signInResponse.status, 200);
+  assert.equal((await signInResponse.json()).user.id, userId);
+  assert.equal(googleUsersCreated.length, beforeCount);
+});
+
+test('Google auth does not link an existing email/password account', async () => {
+  addGoogleProfile('password-account-google', {
+    sub: 'google-sub-password-account',
+    email: user.email
+  });
+  const beforeCount = googleUsersCreated.length;
+
+  const signInResponse = await googleRequest('/auth/google', 'password-account-google');
+  assert.equal(signInResponse.status, 401);
+  assert.deepEqual(await signInResponse.json(), {
+    error: 'No account found. Please sign up first.'
+  });
+
+  const signupResponse = await googleRequest('/auth/google/signup', 'password-account-google');
+  assert.equal(signupResponse.status, 409);
+  assert.match((await signupResponse.json()).error, /Google sign-in was not linked/);
+  assert.equal(googleUsersCreated.length, beforeCount);
+  assert.equal(usersByGoogleSub.has('google-sub-password-account'), false);
 });
 
 test('invalid session tokens are rejected', async () => {

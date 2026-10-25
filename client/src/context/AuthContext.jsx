@@ -1,5 +1,12 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { login, loginWithGoogle, register, getCurrentUser, logout as logoutRequest } from '../api/auth';
+import {
+  login,
+  loginWithGoogle,
+  signupWithGoogle,
+  register,
+  getCurrentUser,
+  logout as logoutRequest
+} from '../api/auth';
 
 const AuthContext = createContext(null);
 
@@ -57,6 +64,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const handleGoogleSignup = async (credential) => {
+    try {
+      const response = await signupWithGoogle(credential);
+      setUser(response.user);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: getAuthErrorMessage(error, 'Google sign-up failed')
+      };
+    }
+  };
+
   const handleRegister = async (fullName, email, password, confirmPassword) => {
     try {
       const response = await register({ fullName, email, password, confirmPassword });
@@ -86,6 +106,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login: handleLogin,
     loginWithGoogle: handleGoogleLogin,
+    signupWithGoogle: handleGoogleSignup,
     register: handleRegister,
     logout: handleLogout
   };

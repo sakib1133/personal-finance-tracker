@@ -218,6 +218,67 @@ const createSession = async (user, res) => {
   res.cookie(SESSION_COOKIE_NAME, token, SESSION_COOKIE_OPTIONS);
 };
 
+const verifyGoogleCredential = async (req, res) => {
+  if (!googleOAuthClient || !GOOGLE_CLIENT_ID) {
+    res.status(503).json({ error: 'Google sign-in is not configured on the server' });
+    return null;
+  }
+
+  const { credential } = req.body || {};
+  if (typeof credential !== 'string' || credential.length > 10000) {
+    res.status(400).json({ error: 'A valid Google credential is required' });
+    return null;
+  }
+
+  let payload;
+  try {
+    const ticket = await googleOAuthClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID
+    });
+    payload = ticket.getPayload();
+  } catch {
+    res.status(401).json({ error: 'Google sign-in failed. Please try again.' });
+    return null;
+  }
+
+  if (
+    !payload ||
+    payload.aud !== GOOGLE_CLIENT_ID ||
+    payload.email_verified !== true ||
+    typeof payload.email !== 'string' ||
+    !payload.email ||
+    typeof payload.sub !== 'string' ||
+    !payload.sub
+  ) {
+    res.status(401).json({ error: 'Google sign-in requires a verified Google email' });
+    return null;
+  }
+
+  const email = normalizeEmail(payload.email);
+  if (!email) {
+    res.status(401).json({ error: 'Google sign-in requires a valid verified email' });
+    return null;
+  }
+  const fullName = (typeof payload.name === 'string' && payload.name.trim())
+    ? payload.name.trim().slice(0, 255)
+    : email.split('@')[0].slice(0, 255);
+
+  return { sub: payload.sub, email, fullName };
+};
+
+const respondWithGoogleSession = async (user, res) => {
+  await createSession(user, res);
+  res.json({
+    message: 'Login successful',
+    user: {
+      id: user.id,
+      fullName: user.name,
+      email: user.email
+    }
+  });
+};
+
 const clearSessionCookie = (res) => {
   const { maxAge, ...clearOptions } = SESSION_COOKIE_OPTIONS;
   res.clearCookie(SESSION_COOKIE_NAME, clearOptions);
@@ -336,56 +397,40 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
 });
 
 app.post('/auth/google', googleLoginLimiter, async (req, res) => {
-  if (!googleOAuthClient || !GOOGLE_CLIENT_ID) {
-    return res.status(503).json({ error: 'Google sign-in is not configured on the server' });
-  }
+  const profile = await verifyGoogleCredential(req, res);
+  if (!profile) return;
 
-  const { credential } = req.body || {};
-  if (typeof credential !== 'string' || credential.length > 10000) {
-    return res.status(400).json({ error: 'A valid Google credential is required' });
-  }
-
-  let payload;
   try {
-    const ticket = await googleOAuthClient.verifyIdToken({
-      idToken: credential,
-      audience: GOOGLE_CLIENT_ID
-    });
-    payload = ticket.getPayload();
-  } catch {
-    return res.status(401).json({ error: 'Google sign-in failed. Please try again.' });
-  }
+    const user = await queryOne(
+      'SELECT id, name, email FROM users WHERE google_sub = $1',
+      [profile.sub]
+    );
 
-  if (
-    !payload ||
-    payload.aud !== GOOGLE_CLIENT_ID ||
-    payload.email_verified !== true ||
-    typeof payload.email !== 'string' ||
-    !payload.email ||
-    typeof payload.sub !== 'string' ||
-    !payload.sub
-  ) {
-    return res.status(401).json({ error: 'Google sign-in requires a verified Google email' });
-  }
+    if (!user) {
+      return res.status(401).json({ error: 'No account found. Please sign up first.' });
+    }
 
-  const email = normalizeEmail(payload.email);
-  if (!email) {
-    return res.status(401).json({ error: 'Google sign-in requires a valid verified email' });
+    await respondWithGoogleSession(user, res);
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    res.status(500).json({ error: 'Failed to sign in with Google' });
   }
-  const fullName = (typeof payload.name === 'string' && payload.name.trim())
-    ? payload.name.trim().slice(0, 255)
-    : email.split('@')[0].slice(0, 255);
+});
+
+app.post('/auth/google/signup', googleLoginLimiter, async (req, res) => {
+  const profile = await verifyGoogleCredential(req, res);
+  if (!profile) return;
 
   try {
     let user = await queryOne(
       'SELECT id, name, email FROM users WHERE google_sub = $1',
-      [payload.sub]
+      [profile.sub]
     );
 
     if (!user) {
       const existingEmail = await queryOne(
         'SELECT id FROM users WHERE LOWER(BTRIM(email)) = $1',
-        [email]
+        [profile.email]
       );
       if (existingEmail) {
         return res.status(409).json({
@@ -398,7 +443,7 @@ app.post('/auth/google', googleLoginLimiter, async (req, res) => {
           `INSERT INTO users (id, name, email, password, google_sub, created_at)
            VALUES ($1, $2, $3, NULL, $4, $5)
            RETURNING id, name, email`,
-          [uuidv4(), fullName, email, payload.sub, new Date().toISOString()]
+          [uuidv4(), profile.fullName, profile.email, profile.sub, new Date().toISOString()]
         );
       } catch (error) {
         if (error.code !== '23505') {
@@ -407,7 +452,7 @@ app.post('/auth/google', googleLoginLimiter, async (req, res) => {
 
         user = await queryOne(
           'SELECT id, name, email FROM users WHERE google_sub = $1',
-          [payload.sub]
+          [profile.sub]
         );
         if (!user) {
           return res.status(409).json({
@@ -417,19 +462,10 @@ app.post('/auth/google', googleLoginLimiter, async (req, res) => {
       }
     }
 
-    await createSession(user, res);
-
-    res.json({
-      message: 'Login successful',
-      user: {
-        id: user.id,
-        fullName: user.name,
-        email: user.email
-      }
-    });
+    await respondWithGoogleSession(user, res);
   } catch (error) {
-    console.error('Google sign-in error:', error);
-    res.status(500).json({ error: 'Failed to sign in with Google' });
+    console.error('Google signup error:', error);
+    res.status(500).json({ error: 'Failed to sign up with Google' });
   }
 });
 

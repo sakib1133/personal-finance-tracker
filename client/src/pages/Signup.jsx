@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import PasswordInput from '../components/PasswordInput';
+import GoogleSignIn from '../components/GoogleSignIn';
 
 export default function Signup() {
   const [fullName, setFullName] = useState('');
@@ -11,7 +12,7 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  const { register, signupWithGoogle } = useAuth();
   const navigate = useNavigate();
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
 
@@ -32,6 +33,21 @@ export default function Signup() {
         : passwordStrength >= 2
           ? 'Fair'
           : 'Weak';
+
+  const handleGoogleCredential = async (credential) => {
+    setError('');
+    setLoading(true);
+    try {
+      const result = await signupWithGoogle(credential);
+      if (result.success) {
+        navigate('/dashboard');
+      } else {
+        setError(result.error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -173,6 +189,13 @@ export default function Signup() {
               {loading ? 'Creating account...' : 'Create account'}
             </button>
           </form>
+
+          <GoogleSignIn
+            loading={loading}
+            onCredential={handleGoogleCredential}
+            onError={setError}
+            text="continue_with"
+          />
 
           {isInstallable && !isInstalled && (
             <button type="button" onClick={promptInstall} className="login-install">
