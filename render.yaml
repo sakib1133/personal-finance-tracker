@@ -21,5 +21,8 @@ services:
       - key: CORS_ORIGIN
         value: "https://personal-finance-tracker-cyan-tau.vercel.app"
 
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+
       - key: DATABASE_URL
         value: "postgresql://user:password@host/dbname?sslmode=require"

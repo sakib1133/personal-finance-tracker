@@ -490,6 +490,50 @@ button {
   height: 17px;
 }
 
+.google-signin {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  margin-top: 19px;
+}
+
+.google-signin-divider {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  color: #748078;
+  font-size: 12px;
+}
+
+.google-signin-divider::before,
+.google-signin-divider::after {
+  height: 1px;
+  flex: 1;
+  background: #e2e9e4;
+  content: '';
+}
+
+.google-signin-button {
+  min-height: 40px;
+}
+
+.google-signin-loading .google-signin-button {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.google-signin-status,
+.google-signin-unavailable {
+  color: #748078;
+  font-size: 12px;
+  text-align: center;
+}
+
+.google-signin-unavailable {
+  margin: 19px 0 0;
+}
+
 .login-install {
   display: flex;
   width: 100%;

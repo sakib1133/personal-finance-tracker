@@ -96,13 +96,35 @@ PORT=10000
 DATABASE_URL=<Neon Connection String>
 JWT_SECRET=<Strong Secret>
 CORS_ORIGIN=<Frontend URL>
+GOOGLE_CLIENT_ID=<Google OAuth web client ID>
 ```
 
 Set this separately in the Vercel project:
 
 ```env
 VITE_API_URL=<Render API base URL>
+VITE_GOOGLE_CLIENT_ID=<Same Google OAuth web client ID>
 ```
+
+Configure the OAuth client in Google Cloud Console as a **Web application** and
+add each frontend origin (for example, `http://localhost:3000` and your Vercel
+domain) to its authorized JavaScript origins. The client ID is public and is
+used by both the frontend and backend; do not add a client secret to the
+frontend. Set `GOOGLE_CLIENT_ID` in Render and `VITE_GOOGLE_CLIENT_ID` in
+Vercel/local frontend build environments.
+
+Google sign-in needs a one-time manual database migration before deployment.
+Back up the database and verify the target connection before applying it. From
+the repository root in PowerShell, set `$env:DATABASE_URL` to the intended
+database connection string and run:
+
+```powershell
+psql "$env:DATABASE_URL" -v ON_ERROR_STOP=1 -f server/migrations/20261024_add_google_sign_in.sql
+```
+
+The migration only makes `users.password` nullable and adds a nullable unique
+`users.google_sub`; it does not remove or rewrite existing user data. Do not
+apply it automatically from the application startup process.
 
 Signup requires a password between 6 and 15 characters, a lowercase letter, a
 number, and a symbol. Uppercase letters are optional. Passwords are limited to

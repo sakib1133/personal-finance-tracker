@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { login, register, getCurrentUser } from '../api/auth';
+import { login, loginWithGoogle, register, getCurrentUser } from '../api/auth';
 
 const AuthContext = createContext(null);
 
@@ -55,6 +55,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const handleGoogleLogin = async (credential) => {
+    try {
+      const response = await loginWithGoogle(credential);
+      localStorage.setItem('token', response.token);
+      setToken(response.token);
+      setUser(response.user);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: getAuthErrorMessage(error, 'Google sign-in failed')
+      };
+    }
+  };
+
   const handleRegister = async (fullName, email, password, confirmPassword) => {
     try {
       const response = await register({ fullName, email, password, confirmPassword });
@@ -81,6 +96,7 @@ export const AuthProvider = ({ children }) => {
     token,
     loading,
     login: handleLogin,
+    loginWithGoogle: handleGoogleLogin,
     register: handleRegister,
     logout: handleLogout
   };

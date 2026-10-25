@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const { query, queryOne, initDatabase, migrateFromJSON } = require('./db');
 const { normalizeResponseData } = require('./normalizeData');
 
@@ -21,6 +22,15 @@ const loginLimiter = rateLimit({
     error: 'Too many login attempts. Please try again later.'
   }
 });
+const googleLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many Google sign-in attempts. Please try again later.'
+  }
+});
 
 const registerLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -33,6 +43,8 @@ const registerLimiter = rateLimit({
 });
 const PORT = process.env.PORT || 5001;
 const JWT_SECRET = process.env.JWT_SECRET;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const googleOAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const toNumber = (value) => {
   const n = Number(value);
@@ -215,12 +227,12 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    if (!email || typeof password !== 'string' || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     const user = await queryOne('SELECT * FROM users WHERE email = $1', [email]);
-    if (!user) {
+    if (!user || typeof user.password !== 'string') {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -243,6 +255,106 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Failed to login' });
+  }
+});
+
+app.post('/auth/google', googleLoginLimiter, async (req, res) => {
+  if (!googleOAuthClient || !GOOGLE_CLIENT_ID) {
+    return res.status(503).json({ error: 'Google sign-in is not configured on the server' });
+  }
+
+  const { credential } = req.body || {};
+  if (typeof credential !== 'string' || credential.length > 10000) {
+    return res.status(400).json({ error: 'A valid Google credential is required' });
+  }
+
+  let payload;
+  try {
+    const ticket = await googleOAuthClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID
+    });
+    payload = ticket.getPayload();
+  } catch {
+    return res.status(401).json({ error: 'Google sign-in failed. Please try again.' });
+  }
+
+  if (
+    !payload ||
+    payload.aud !== GOOGLE_CLIENT_ID ||
+    payload.email_verified !== true ||
+    typeof payload.email !== 'string' ||
+    !payload.email ||
+    typeof payload.sub !== 'string' ||
+    !payload.sub
+  ) {
+    return res.status(401).json({ error: 'Google sign-in requires a verified Google email' });
+  }
+
+  const email = payload.email.trim().toLowerCase();
+  const fullName = (typeof payload.name === 'string' && payload.name.trim())
+    ? payload.name.trim().slice(0, 255)
+    : email.split('@')[0].slice(0, 255);
+
+  try {
+    let user = await queryOne(
+      'SELECT id, name, email FROM users WHERE google_sub = $1',
+      [payload.sub]
+    );
+
+    if (!user) {
+      const existingEmail = await queryOne(
+        'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+        [email]
+      );
+      if (existingEmail) {
+        return res.status(409).json({
+          error: 'An account with this email already exists. Sign in with your password; Google sign-in was not linked.'
+        });
+      }
+
+      try {
+        user = await queryOne(
+          `INSERT INTO users (id, name, email, password, google_sub, created_at)
+           VALUES ($1, $2, $3, NULL, $4, $5)
+           RETURNING id, name, email`,
+          [uuidv4(), fullName, email, payload.sub, new Date().toISOString()]
+        );
+      } catch (error) {
+        if (error.code !== '23505') {
+          throw error;
+        }
+
+        user = await queryOne(
+          'SELECT id, name, email FROM users WHERE google_sub = $1',
+          [payload.sub]
+        );
+        if (!user) {
+          return res.status(409).json({
+            error: 'An account with this email already exists. Sign in with your password; Google sign-in was not linked.'
+          });
+        }
+      }
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, fullName: user.name },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.id,
+        fullName: user.name,
+        email: user.email
+      }
+    });
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    res.status(500).json({ error: 'Failed to sign in with Google' });
   }
 });
 
