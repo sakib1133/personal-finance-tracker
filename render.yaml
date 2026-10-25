@@ -25,4 +25,4 @@ services:
         sync: false
 
       - key: DATABASE_URL
-        value: "postgresql://user:password@host/dbname?sslmode=require"
+        sync: false

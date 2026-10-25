@@ -4,14 +4,19 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const { query, queryOne, initDatabase, migrateFromJSON } = require('./db');
 const { normalizeResponseData } = require('./normalizeData');
+const { isDailySpendingRangeWithinLimit } = require('./analyticsDateRange');
+const { normalizeEmail } = require('./email');
+const { parsePositiveAmount } = require('./expenseValidation');
+const { SESSION_LIFETIME_MS, signSessionToken, verifySessionToken } = require('./authTokens');
+const { getSessionCookieName, getSessionCookieOptions, readCookie } = require('./sessionCookie');
 
 require('dotenv').config();
 
 const app = express();
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
 app.use(helmet());
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -32,6 +37,16 @@ const googleLoginLimiter = rateLimit({
   }
 });
 
+const dailySpendingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too many analytics requests. Please try again later.'
+  }
+});
+
 const registerLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
@@ -46,40 +61,38 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const googleOAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PRODUCTION = NODE_ENV === 'production';
+const SESSION_COOKIE_NAME = getSessionCookieName(IS_PRODUCTION);
+const SESSION_COOKIE_OPTIONS = getSessionCookieOptions(IS_PRODUCTION);
 const toNumber = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 };
 
-if (!JWT_SECRET) {
-  console.error('ERROR: JWT_SECRET is required');
+if (!JWT_SECRET || Buffer.byteLength(JWT_SECRET, 'utf8') < 32) {
+  console.error('ERROR: JWT_SECRET must contain at least 32 bytes of random data');
   process.exit(1);
 }
 
 const normalizeOrigin = (value) => (value || '').replace(/\/+$/, '');
 const allowedOrigins = [
-  process.env.CORS_ORIGIN,
+  ...(process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:3000'
-].filter(Boolean);
+].map(normalizeOrigin);
+const allowedOriginSet = new Set(allowedOrigins);
 
 const isAllowedOrigin = (origin) => {
   if (!origin) {
     return true;
   }
 
-  const normalizedOrigin = normalizeOrigin(origin);
-  const normalizedAllowedOrigins = new Set(allowedOrigins.map(normalizeOrigin));
-
-  if (normalizedAllowedOrigins.has(normalizedOrigin)) {
-    return true;
-  }
-
-  return /^(https?:\/\/)(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin) ||
-    /^(https:\/\/.*\.vercel\.app)$/i.test(normalizedOrigin) ||
-    /^(https:\/\/.*\.onrender\.com)$/i.test(normalizedOrigin);
+  return allowedOriginSet.has(normalizeOrigin(origin));
 };
 
 const corsOptions = {
@@ -94,11 +107,31 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'Expires']
+  allowedHeaders: ['Content-Type', 'Cache-Control', 'Pragma', 'Expires']
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '16kb' }));
+
+app.use((req, res, next) => {
+  if (req.body === undefined) {
+    req.body = {};
+  } else if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ error: 'Request body must be a JSON object' });
+  }
+
+  next();
+});
+
+app.use((req, res, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
+      req.headers.origin &&
+      !isAllowedOrigin(req.headers.origin)) {
+    return res.status(403).json({ error: 'Request origin is not allowed' });
+  }
+
+  next();
+});
 
 app.use((req, res, next) => {
   const originalJson = res.json.bind(res);
@@ -140,32 +173,68 @@ app.get('/', (req, res) => {
 });
 
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = readCookie(req, SESSION_COOKIE_NAME);
 
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+  let payload;
+  try {
+    payload = verifySessionToken(token, JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired session' });
+  }
+
+  queryOne(
+    'SELECT id FROM auth_sessions WHERE id = $1 AND user_id = $2 AND expires_at > NOW()',
+    [payload.jti, payload.sub]
+  ).then((session) => {
+    if (!session) {
+      clearSessionCookie(res);
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
-    req.user = user;
+
+    req.user = {
+      id: payload.sub,
+      email: payload.email,
+      fullName: payload.fullName,
+      sessionId: payload.jti
+    };
     next();
-  });
+  }).catch(next);
+};
+
+const createSession = async (user, res) => {
+  const sessionId = uuidv4();
+  const expiresAt = new Date(Date.now() + SESSION_LIFETIME_MS);
+
+  await query(
+    'INSERT INTO auth_sessions (id, user_id, expires_at) VALUES ($1, $2, $3)',
+    [sessionId, user.id, expiresAt.toISOString()]
+  );
+
+  const token = signSessionToken(user, sessionId, JWT_SECRET);
+  res.cookie(SESSION_COOKIE_NAME, token, SESSION_COOKIE_OPTIONS);
+};
+
+const clearSessionCookie = (res) => {
+  const { maxAge, ...clearOptions } = SESSION_COOKIE_OPTIONS;
+  res.clearCookie(SESSION_COOKIE_NAME, clearOptions);
 };
 
 app.post('/auth/register', registerLimiter, async (req, res) => {
   try {
     const { fullName, email, password, confirmPassword } = req.body;
 
-    if (!fullName || !email || !password || !confirmPassword) {
+    if (
+      typeof fullName !== 'string' ||
+      !fullName.trim() ||
+      fullName.trim().length > 255 ||
+      typeof password !== 'string' ||
+      typeof confirmPassword !== 'string'
+    ) {
       return res.status(400).json({ error: 'All fields are required' });
-    }
-
-    if (typeof password !== 'string') {
-      return res.status(400).json({ error: 'Password must be text' });
     }
 
     if (password !== confirmPassword) {
@@ -173,22 +242,16 @@ app.post('/auth/register', registerLimiter, async (req, res) => {
     }
 
     const passwordLength = Array.from(password).length;
-    if (passwordLength < 6 || passwordLength > 15) {
-      return res.status(400).json({ error: 'Password must be between 6 and 15 characters' });
+    if (passwordLength < 12) {
+      return res.status(400).json({ error: 'Password must be at least 12 characters' });
     }
 
     if (Buffer.byteLength(password, 'utf8') > 72) {
       return res.status(400).json({ error: 'Password must be no more than 72 UTF-8 bytes' });
     }
 
-    if (!/[a-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-      return res.status(400).json({
-        error: 'Password must include a lowercase letter, a number, and a symbol'
-      });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
@@ -196,28 +259,34 @@ app.post('/auth/register', registerLimiter, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const createdAt = new Date().toISOString();
 
-    const existingUser = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
+    const existingUser = await queryOne(
+      'SELECT id FROM users WHERE LOWER(BTRIM(email)) = $1',
+      [normalizedEmail]
+    );
     if (existingUser) {
-      return res.status(400).json({ error: 'Email already registered' });
+      return res.status(409).json({ error: 'Email already registered' });
     }
 
     await query(
       'INSERT INTO users (id, name, email, password, created_at) VALUES ($1, $2, $3, $4, $5)',
-      [userId, fullName, email, hashedPassword, createdAt]
+      [userId, fullName.trim(), normalizedEmail, hashedPassword, createdAt]
     );
 
-    const token = jwt.sign({ id: userId, email, fullName }, JWT_SECRET, { expiresIn: '7d' });
+    const user = { id: userId, email: normalizedEmail, name: fullName.trim() };
+    await createSession(user, res);
 
     res.status(201).json({
       message: 'User registered successfully',
-      token,
       user: {
         id: userId,
-        fullName,
-        email
+        fullName: user.name,
+        email: user.email
       }
     });
   } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Failed to register user' });
   }
@@ -226,12 +295,21 @@ app.post('/auth/register', registerLimiter, async (req, res) => {
 app.post('/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
-    if (!email || typeof password !== 'string' || !password) {
+    if (
+      !normalizedEmail ||
+      typeof password !== 'string' ||
+      !password ||
+      Buffer.byteLength(password, 'utf8') > 72
+    ) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = await queryOne('SELECT * FROM users WHERE email = $1', [email]);
+    const user = await queryOne(
+      'SELECT * FROM users WHERE LOWER(BTRIM(email)) = $1',
+      [normalizedEmail]
+    );
     if (!user || typeof user.password !== 'string') {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -241,11 +319,10 @@ app.post('/auth/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign({ id: user.id, email: user.email, fullName: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    await createSession(user, res);
 
     res.json({
       message: 'Login successful',
-      token,
       user: {
         id: user.id,
         fullName: user.name,
@@ -291,7 +368,10 @@ app.post('/auth/google', googleLoginLimiter, async (req, res) => {
     return res.status(401).json({ error: 'Google sign-in requires a verified Google email' });
   }
 
-  const email = payload.email.trim().toLowerCase();
+  const email = normalizeEmail(payload.email);
+  if (!email) {
+    return res.status(401).json({ error: 'Google sign-in requires a valid verified email' });
+  }
   const fullName = (typeof payload.name === 'string' && payload.name.trim())
     ? payload.name.trim().slice(0, 255)
     : email.split('@')[0].slice(0, 255);
@@ -304,7 +384,7 @@ app.post('/auth/google', googleLoginLimiter, async (req, res) => {
 
     if (!user) {
       const existingEmail = await queryOne(
-        'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+        'SELECT id FROM users WHERE LOWER(BTRIM(email)) = $1',
         [email]
       );
       if (existingEmail) {
@@ -337,15 +417,10 @@ app.post('/auth/google', googleLoginLimiter, async (req, res) => {
       }
     }
 
-    const token = jwt.sign(
-      { id: user.id, email: user.email, fullName: user.name },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    await createSession(user, res);
 
     res.json({
       message: 'Login successful',
-      token,
       user: {
         id: user.id,
         fullName: user.name,
@@ -355,6 +430,16 @@ app.post('/auth/google', googleLoginLimiter, async (req, res) => {
   } catch (error) {
     console.error('Google sign-in error:', error);
     res.status(500).json({ error: 'Failed to sign in with Google' });
+  }
+});
+
+app.post('/auth/logout', authenticateToken, async (req, res, next) => {
+  try {
+    await query('DELETE FROM auth_sessions WHERE id = $1', [req.user.sessionId]);
+    clearSessionCookie(res);
+    res.status(204).end();
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -463,9 +548,19 @@ const getPreviousDateRange = ({ startDate, endDate }) => {
 app.post('/expenses', authenticateToken, async (req, res) => {
   try {
     const { amount, category, date, note } = req.body;
+    const parsedAmount = parsePositiveAmount(amount);
+    const validCategories = ['Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
 
-    if (!amount || !category || !date) {
+    if (parsedAmount === null || !category || !date) {
       return res.status(400).json({ error: 'Amount, category, and date are required' });
+    }
+
+    if (!validCategories.includes(category)) {
+      return res.status(400).json({ error: 'Invalid category' });
+    }
+
+    if (note !== undefined && (typeof note !== 'string' || note.length > 2000)) {
+      return res.status(400).json({ error: 'Note must be text of at most 2000 characters' });
     }
 
     if (!isValidISODate(date)) {
@@ -481,7 +576,7 @@ app.post('/expenses', authenticateToken, async (req, res) => {
 
     const rows = await query(
       'INSERT INTO expenses (id, user_id, amount, category, date, note, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [expenseId, req.user.id, parseFloat(amount), category, date, note || '', createdAt]
+      [expenseId, req.user.id, parsedAmount, category, date, note || '', createdAt]
     );
 
     res.status(201).json(rows[0]);
@@ -509,14 +604,27 @@ app.put('/expenses/:id', authenticateToken, async (req, res) => {
     const values = [];
 
     if (amount !== undefined) {
+      const parsedAmount = parsePositiveAmount(amount);
+      if (parsedAmount === null) {
+        return res.status(400).json({
+          error: 'Amount must be a positive number with up to two decimal places'
+        });
+      }
       updates.push('amount = $' + (values.length + 1));
-      values.push(parseFloat(amount));
+      values.push(parsedAmount);
     }
-    if (category) {
+    if (category !== undefined) {
+      const validCategories = ['Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
+      if (!validCategories.includes(category)) {
+        return res.status(400).json({ error: 'Invalid category' });
+      }
       updates.push('category = $' + (values.length + 1));
       values.push(category);
     }
-    if (date) {
+    if (date !== undefined) {
+      if (typeof date !== 'string' || !date) {
+        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+      }
       if (!isValidISODate(date)) {
         return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
       }
@@ -529,6 +637,9 @@ app.put('/expenses/:id', authenticateToken, async (req, res) => {
       values.push(date);
     }
     if (note !== undefined) {
+      if (typeof note !== 'string' || note.length > 2000) {
+        return res.status(400).json({ error: 'Note must be text of at most 2000 characters' });
+      }
       updates.push('note = $' + (values.length + 1));
       values.push(note);
     }
@@ -590,18 +701,15 @@ app.get('/budgets', authenticateToken, async (req, res) => {
 app.post('/budgets', authenticateToken, async (req, res) => {
   try {
     const { category, monthlyBudget } = req.body;
+    const parsedBudget = parsePositiveAmount(monthlyBudget);
 
-    if (!category || !monthlyBudget) {
+    if (!category || parsedBudget === null) {
       return res.status(400).json({ error: 'Category and monthly budget are required' });
     }
 
     const validCategories = ['Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
     if (!validCategories.includes(category)) {
       return res.status(400).json({ error: 'Invalid category' });
-    }
-
-    if (isNaN(monthlyBudget) || monthlyBudget <= 0) {
-      return res.status(400).json({ error: 'Monthly budget must be a positive number' });
     }
 
     const budgetId = uuidv4();
@@ -614,7 +722,7 @@ app.post('/budgets', authenticateToken, async (req, res) => {
 
     const rows = await query(
       'INSERT INTO budgets (id, user_id, category, monthly_budget, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [budgetId, req.user.id, category, parseFloat(monthlyBudget), now, now]
+      [budgetId, req.user.id, category, parsedBudget, now, now]
     );
 
     const budget = rows[0];
@@ -648,7 +756,7 @@ app.put('/budgets/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    if (category) {
+    if (category !== undefined) {
       const validCategories = ['Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
       if (!validCategories.includes(category)) {
         return res.status(400).json({ error: 'Invalid category' });
@@ -660,22 +768,26 @@ app.put('/budgets/:id', authenticateToken, async (req, res) => {
       }
     }
 
+    let parsedBudget;
     if (monthlyBudget !== undefined) {
-      if (isNaN(monthlyBudget) || monthlyBudget <= 0) {
-        return res.status(400).json({ error: 'Monthly budget must be a positive number' });
+      parsedBudget = parsePositiveAmount(monthlyBudget);
+      if (parsedBudget === null) {
+        return res.status(400).json({
+          error: 'Monthly budget must be a positive number with up to two decimal places'
+        });
       }
     }
 
     const updates = [];
     const values = [];
 
-    if (category) {
+    if (category !== undefined) {
       updates.push('category = $' + (values.length + 1));
       values.push(category);
     }
     if (monthlyBudget !== undefined) {
       updates.push('monthly_budget = $' + (values.length + 1));
-      values.push(parseFloat(monthlyBudget));
+      values.push(parsedBudget);
     }
     updates.push('updated_at = $' + (values.length + 1));
     values.push(new Date().toISOString());
@@ -898,10 +1010,16 @@ app.get('/analytics/category-breakdown', authenticateToken, async (req, res) => 
   }
 });
 
-app.get('/analytics/daily-spending', authenticateToken, async (req, res) => {
+app.get('/analytics/daily-spending', authenticateToken, dailySpendingLimiter, async (req, res) => {
   try {
     const dateRange = getAnalyticsDateRange(req, res);
     if (dateRange === undefined) return;
+
+    if (dateRange && !isDailySpendingRangeWithinLimit(dateRange)) {
+      return res.status(400).json({
+        error: 'Daily spending date range cannot exceed 367 days'
+      });
+    }
 
     const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
 
@@ -972,6 +1090,27 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+app.use((error, req, res, next) => {
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  if (error.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Request body is too large' });
+  }
+
+  if (error.status === 400 || error.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Invalid request body' });
+  }
+
+  if (error.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'Request origin is not allowed' });
+  }
+
+  console.error('Unhandled request error:', error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 async function startServer() {
   try {
     console.log(`Starting server in ${NODE_ENV} mode...`);
@@ -990,4 +1129,8 @@ async function startServer() {
   }
 }
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };

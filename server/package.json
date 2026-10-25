@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "node -e \"console.log('Backend-only build step skipped')\""
+    "build": "node -e \"console.log('Backend-only build step skipped')\"",
+    "test": "node --test"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -18,7 +19,7 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.22.0",
-    "uuid": "^9.0.0"
+    "uuid": "^11.1.1"
   },
   "keywords": [
     "expense",

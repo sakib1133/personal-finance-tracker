@@ -1,3 +1,5 @@
+import { serializeCsv } from '../utils/csv';
+
 export default function ExportButton({ expenses }) {
   const exportToCSV = () => {
     if (expenses.length === 0) {
@@ -22,7 +24,7 @@ export default function ExportButton({ expenses }) {
         hour12: true
       });
 
-      const note = expense.note ? `"${expense.note}"` : '-';
+      const note = expense.note || '-';
 
       return [
         index + 1,
@@ -34,9 +36,7 @@ export default function ExportButton({ expenses }) {
       ];
     });
 
-    const csvContent = [headers, ...rows]
-      .map(row => row.join(','))
-      .join('\n');
+    const csvContent = serializeCsv([headers, ...rows]);
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);

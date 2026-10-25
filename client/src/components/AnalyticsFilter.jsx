@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isDateRangeWithinLimit } from '../utils/dateRange';
 
 export default function AnalyticsFilter({ onFilterChange }) {
   const [selectedFilter, setSelectedFilter] = useState('Last 30 Days');
@@ -49,6 +50,10 @@ export default function AnalyticsFilter({ onFilterChange }) {
         if (customStartDate && customEndDate) {
           if (customStartDate > customEndDate) {
             setDateError('Start date must be on or before end date');
+            return;
+          }
+          if (!isDateRangeWithinLimit(customStartDate, customEndDate)) {
+            setDateError('Date range cannot exceed 367 days');
             return;
           }
           setDateError('');

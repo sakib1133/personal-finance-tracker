@@ -1,0 +1,183 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { randomBytes } = require('node:crypto');
+const bcrypt = require('bcryptjs');
+
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = randomBytes(32).toString('hex');
+process.env.GOOGLE_CLIENT_ID = '';
+
+const database = require('../db');
+const user = {
+  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  name: 'Test User',
+  email: 'person@example.com',
+  password: bcrypt.hashSync('correct-password', 4)
+};
+const sessions = new Map();
+let expenseSelectCount = 0;
+let expenseInsertCount = 0;
+
+database.query = async (text, values = []) => {
+  if (text.includes('INSERT INTO auth_sessions')) {
+    sessions.set(values[0], { id: values[0], user_id: values[1], expires_at: values[2] });
+    return [];
+  }
+  if (text.includes('DELETE FROM auth_sessions')) {
+    sessions.delete(values[0]);
+    return [];
+  }
+  if (text.includes('INSERT INTO expenses')) {
+    expenseInsertCount += 1;
+    return [];
+  }
+  return [];
+};
+
+database.queryOne = async (text, values = []) => {
+  if (text.includes('FROM auth_sessions')) {
+    const session = sessions.get(values[0]);
+    return session && session.user_id === values[1] && Date.parse(session.expires_at) > Date.now()
+      ? session
+      : undefined;
+  }
+  if (text.includes('FROM users') && text.includes('LOWER(BTRIM(email))')) {
+    return user;
+  }
+  if (text.includes('FROM users') && text.includes('WHERE id = $1')) {
+    return user;
+  }
+  if (text.includes('FROM expenses')) {
+    expenseSelectCount += 1;
+    return {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      user_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    };
+  }
+  return undefined;
+};
+
+const { app } = require('../server');
+let server;
+let baseUrl;
+
+test.before(async () => {
+  server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
+
+test.after(async () => {
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+});
+
+test('email/password login issues an HttpOnly session cookie and logout revokes it', async () => {
+  const loginResponse = await fetch(`${baseUrl}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: ' PERSON@EXAMPLE.COM ', password: 'correct-password' })
+  });
+
+  assert.equal(loginResponse.status, 200);
+  const responseBody = await loginResponse.json();
+  assert.equal(responseBody.token, undefined);
+
+  const cookie = loginResponse.headers.getSetCookie()[0];
+  assert.match(cookie, /HttpOnly/i);
+  assert.match(cookie, /SameSite=Lax/i);
+  const cookiePair = cookie.split(';', 1)[0];
+
+  const currentUserResponse = await fetch(`${baseUrl}/auth/me`, {
+    headers: { Cookie: cookiePair }
+  });
+  assert.equal(currentUserResponse.status, 200);
+
+  const logoutResponse = await fetch(`${baseUrl}/auth/logout`, {
+    method: 'POST',
+    headers: { Cookie: cookiePair }
+  });
+  assert.equal(logoutResponse.status, 204);
+
+  const revokedResponse = await fetch(`${baseUrl}/auth/me`, {
+    headers: { Cookie: cookiePair }
+  });
+  assert.equal(revokedResponse.status, 401);
+});
+
+test('invalid session tokens are rejected', async () => {
+  const response = await fetch(`${baseUrl}/auth/me`, {
+    headers: { Cookie: 'pft_session=not-a-valid-token' }
+  });
+  assert.equal(response.status, 401);
+});
+
+test('protected finance routes reject requests without a session cookie', async () => {
+  const response = await fetch(`${baseUrl}/expenses`);
+  assert.equal(response.status, 401);
+});
+
+test('a user cannot delete another user’s expense by changing its ID', async () => {
+  const loginResponse = await fetch(`${baseUrl}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: user.email, password: 'correct-password' })
+  });
+  const cookiePair = loginResponse.headers.getSetCookie()[0].split(';', 1)[0];
+  const beforeSelectCount = expenseSelectCount;
+  const response = await fetch(`${baseUrl}/expenses/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb`, {
+    method: 'DELETE',
+    headers: { Cookie: cookiePair }
+  });
+
+  assert.equal(response.status, 403);
+  assert.equal(expenseSelectCount, beforeSelectCount + 1);
+});
+
+test('malformed expense amounts and oversized daily analytics ranges are rejected before data queries', async () => {
+  const loginResponse = await fetch(`${baseUrl}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: user.email, password: 'correct-password' })
+  });
+  const cookiePair = loginResponse.headers.getSetCookie()[0].split(';', 1)[0];
+
+  const beforeInsertCount = expenseInsertCount;
+  const invalidExpenseResponse = await fetch(`${baseUrl}/expenses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: cookiePair },
+    body: JSON.stringify({
+      amount: '15garbage',
+      category: 'Food',
+      date: '2026-10-20'
+    })
+  });
+  assert.equal(invalidExpenseResponse.status, 400);
+  assert.equal(expenseInsertCount, beforeInsertCount);
+
+  const beforeExpenseSelectCount = expenseSelectCount;
+  const analyticsResponse = await fetch(
+    `${baseUrl}/analytics/daily-spending?startDate=2023-03-01&endDate=2024-03-02`,
+    { headers: { Cookie: cookiePair } }
+  );
+  assert.equal(analyticsResponse.status, 400);
+  assert.equal(expenseSelectCount, beforeExpenseSelectCount);
+});
+
+test('unlisted browser origins are rejected', async () => {
+  const response = await fetch(`${baseUrl}/health`, {
+    headers: { Origin: 'https://untrusted.example' }
+  });
+  assert.equal(response.status, 403);
+});
+
+test('login rate limiting returns HTTP 429 when attempts exceed the limit', async () => {
+  const responses = await Promise.all(Array.from({ length: 25 }, () => fetch(`${baseUrl}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: user.email, password: 'wrong-password' })
+  })));
+
+  assert.ok(responses.some((response) => response.status === 429));
+});

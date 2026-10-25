@@ -16,11 +16,8 @@ export default function Signup() {
   const { isInstallable, isInstalled, promptInstall } = usePWAInstall();
 
   const passwordRequirements = [
-    { label: '6 to 15 characters', met: Array.from(password).length >= 6 && Array.from(password).length <= 15 },
-    { label: 'No more than 72 UTF-8 bytes', met: new TextEncoder().encode(password).length <= 72 },
-    { label: 'A lowercase letter', met: /[a-z]/.test(password) },
-    { label: 'A number', met: /\d/.test(password) },
-    { label: 'A symbol', met: /[^A-Za-z0-9]/.test(password) }
+    { label: 'At least 12 characters', met: Array.from(password).length >= 12 },
+    { label: 'No more than 72 UTF-8 bytes', met: new TextEncoder().encode(password).length <= 72 }
   ];
   const passwordStrength = password
     ? passwordRequirements.filter(({ met }) => met).length
@@ -41,7 +38,7 @@ export default function Signup() {
     setError('');
 
     if (!isPasswordStrong) {
-      setError('Use 6 to 15 characters, including a lowercase letter, a number, and a symbol');
+      setError('Use at least 12 characters and no more than 72 UTF-8 bytes');
       return;
     }
 
@@ -126,8 +123,8 @@ export default function Signup() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
-                maxLength={15}
+                minLength={12}
+                maxLength={72}
                 autoComplete="new-password"
                 ariaDescribedBy="password-strength"
                 className="login-input"
@@ -163,8 +160,8 @@ export default function Signup() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={6}
-                maxLength={15}
+                minLength={12}
+                maxLength={72}
                 autoComplete="new-password"
                 className="login-input"
                 style={{ backgroundColor: '#f8faf9', borderColor: '#dce5df', color: '#172b24' }}

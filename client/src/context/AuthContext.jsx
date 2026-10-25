@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { login, loginWithGoogle, register, getCurrentUser } from '../api/auth';
+import { login, loginWithGoogle, register, getCurrentUser, logout as logoutRequest } from '../api/auth';
 
 const AuthContext = createContext(null);
 
@@ -13,17 +13,11 @@ const getAuthErrorMessage = (error, fallback) => (
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-      fetchCurrentUser();
-    } else {
-      setLoading(false);
-    }
+    localStorage.removeItem('token');
+    fetchCurrentUser();
   }, []);
 
   const fetchCurrentUser = async () => {
@@ -31,9 +25,6 @@ export const AuthProvider = ({ children }) => {
       const userData = await getCurrentUser();
       setUser(userData);
     } catch (error) {
-      console.error('Failed to fetch current user:', error);
-      localStorage.removeItem('token');
-      setToken(null);
       setUser(null);
     } finally {
       setLoading(false);
@@ -43,8 +34,6 @@ export const AuthProvider = ({ children }) => {
   const handleLogin = async (email, password) => {
     try {
       const response = await login({ email, password });
-      localStorage.setItem('token', response.token);
-      setToken(response.token);
       setUser(response.user);
       return { success: true };
     } catch (error) {
@@ -58,8 +47,6 @@ export const AuthProvider = ({ children }) => {
   const handleGoogleLogin = async (credential) => {
     try {
       const response = await loginWithGoogle(credential);
-      localStorage.setItem('token', response.token);
-      setToken(response.token);
       setUser(response.user);
       return { success: true };
     } catch (error) {
@@ -73,8 +60,6 @@ export const AuthProvider = ({ children }) => {
   const handleRegister = async (fullName, email, password, confirmPassword) => {
     try {
       const response = await register({ fullName, email, password, confirmPassword });
-      localStorage.setItem('token', response.token);
-      setToken(response.token);
       setUser(response.user);
       return { success: true };
     } catch (error) {
@@ -85,15 +70,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
+  const handleLogout = async () => {
+    try {
+      await logoutRequest();
+    } catch (error) {
+      console.error('Failed to revoke the current session:', error);
+    } finally {
+      setUser(null);
+      setLoading(false);
+    }
   };
 
   const value = {
     user,
-    token,
     loading,
     login: handleLogin,
     loginWithGoogle: handleGoogleLogin,

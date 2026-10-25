@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { createDatabasePoolConfig } = require('./databasePoolConfig');
 require('dotenv').config();
 
 let pool = null;
@@ -9,13 +10,9 @@ function getDb() {
       throw new Error('DATABASE_URL environment variable is required');
     }
 
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000
-    });
+    pool = new Pool(
+      createDatabasePoolConfig(process.env.DATABASE_URL, process.env.NODE_ENV)
+    );
 
     pool.on('error', (err) => {
       console.error('Unexpected PostgreSQL client error:', err);
@@ -75,6 +72,15 @@ async function initDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT fk_budgets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       CONSTRAINT uq_budgets_user_category UNIQUE (user_id, category)
+    )
+  `);
+
+  await database.query(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
