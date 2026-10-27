@@ -28,6 +28,7 @@ export default function DailySpendingChart({ data = [] }) {
           />
 
           <Tooltip
+            labelFormatter={(label, payload) => payload?.[0]?.payload?.date || label}
             contentStyle={{
               backgroundColor: '#1f2937',
               border: 'none',

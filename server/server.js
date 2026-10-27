@@ -8,6 +8,12 @@ const { OAuth2Client } = require('google-auth-library');
 const { query, queryOne, initDatabase, migrateFromJSON } = require('./db');
 const { normalizeResponseData } = require('./normalizeData');
 const { isDailySpendingRangeWithinLimit } = require('./analyticsDateRange');
+const {
+  buildCategoryBreakdown,
+  buildDailySpending,
+  buildMonthlyTrends,
+  sumExpenseCents
+} = require('./analyticsCalculations');
 const { normalizeEmail } = require('./email');
 const { parsePositiveAmount } = require('./expenseValidation');
 const { SESSION_LIFETIME_MS, signSessionToken, verifySessionToken } = require('./authTokens');
@@ -925,10 +931,7 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
       });
     }
 
-    const totalExpenses = expenses.reduce(
-  (sum, exp) => sum + toNumber(exp.amount),
-  0
-);
+    const totalExpenses = sumExpenseCents(expenses) / 100;
     const averageExpenseAmount = totalExpenses / expenses.length;
     const highestSingleExpense = Math.max(
   ...expenses.map((exp) => toNumber(exp.amount))
@@ -972,38 +975,7 @@ app.get('/analytics/monthly-trends', authenticateToken, async (req, res) => {
 
     const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
 
-    const months = [];
-    const now = new Date();
-    const startDate = dateRange
-      ? new Date(`${dateRange.startDate}T00:00:00Z`)
-      : new Date(Date.UTC(now.getFullYear(), now.getMonth() - 11, 1));
-    const endDate = dateRange
-      ? new Date(`${dateRange.endDate}T00:00:00Z`)
-      : new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
-
-    for (
-      let date = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1));
-      date <= endDate;
-      date.setUTCMonth(date.getUTCMonth() + 1)
-    ) {
-      const monthKey = date.toISOString().slice(0, 7);
-
-      const monthExpenses = expenses.filter((exp) => {
-        return String(exp.date).slice(0, 7) === monthKey;
-      });
-
-      const totalSpending = monthExpenses.reduce(
-        (sum, exp) => sum + toNumber(exp.amount),
-        0
-      );
-
-      months.push({
-        month: date.toLocaleString('default', { month: 'short', year: '2-digit', timeZone: 'UTC' }),
-        totalSpending
-      });
-    }
-
-    res.json(months);
+    res.json(buildMonthlyTrends(expenses, dateRange));
   } catch (error) {
     console.error('Monthly trends error:', error);
     res.status(500).json({ error: 'Failed to get monthly trends' });
@@ -1017,30 +989,7 @@ app.get('/analytics/category-breakdown', authenticateToken, async (req, res) => 
 
     const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
 
-    if (expenses.length === 0) {
-      return res.json([]);
-    }
-
-    const categorySpending = {};
-    expenses.forEach((exp) => {
-      if (!categorySpending[exp.category]) {
-        categorySpending[exp.category] = 0;
-      }
-        categorySpending[exp.category] += toNumber(exp.amount);
-
-    });
-
-    const totalSpending = Object.values(categorySpending).reduce((sum, amount) => sum + amount, 0);
-
-    const breakdown = Object.entries(categorySpending)
-      .map(([category, amount]) => ({
-        category,
-        amount,
-        percentage: parseFloat(((amount / totalSpending) * 100).toFixed(2))
-      }))
-      .sort((a, b) => b.amount - a.amount);
-
-    res.json(breakdown);
+    res.json(buildCategoryBreakdown(expenses));
   } catch (error) {
     console.error('Category breakdown error:', error);
     res.status(500).json({ error: 'Failed to get category breakdown' });
@@ -1059,64 +1008,7 @@ app.get('/analytics/daily-spending', authenticateToken, dailySpendingLimiter, as
     }
 
     const expenses = await getAnalyticsExpenses(req.user.id, dateRange);
-
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const rangeStart = dateRange
-      ? new Date(`${dateRange.startDate}T00:00:00Z`)
-      : new Date(Date.UTC(currentYear, currentMonth, 1));
-    const rangeEnd = dateRange
-      ? new Date(`${dateRange.endDate}T00:00:00Z`)
-      : new Date(Date.UTC(currentYear, currentMonth + 1, 0));
-    const currentMonthExpenses = dateRange
-      ? expenses
-      : expenses.filter((exp) => {
-          const expDate = new Date(exp.date);
-          return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-        });
-
-    const dailySpending = {};
-    currentMonthExpenses.forEach((exp) => {
-      const dateKey = String(exp.date).slice(0, 10);
-      if (!dailySpending[dateKey]) {
-        dailySpending[dateKey] = 0;
-      }
-      dailySpending[dateKey] += toNumber(exp.amount);
-    });
-
-    const dailyData = [];
-    const daysInRange = Math.floor((rangeEnd - rangeStart) / (24 * 60 * 60 * 1000)) + 1;
-
-    for (let dayOffset = 0; dayOffset < daysInRange; dayOffset++) {
-      const date = new Date(rangeStart);
-      date.setUTCDate(date.getUTCDate() + dayOffset);
-      const dateKey = date.toISOString().slice(0, 10);
-      dailyData.push({
-        day: dateRange
-          ? date.toLocaleDateString('default', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-          : `Day ${date.getUTCDate()}`,
-        amount: dailySpending[dateKey] || 0
-      });
-    }
-
-    const highestSpendingDay = dailyData.reduce((max, day) =>
-      day.amount > max.amount ? day : max, { day: 'N/A', amount: 0 });
-
-    const averageDailySpending = currentMonthExpenses.length > 0
-      ? currentMonthExpenses.reduce(
-        (sum, exp) => sum + toNumber(exp.amount),
-        0
-      ) / daysInRange
-      : 0;
-
-
-    res.json({
-      dailyData,
-      highestSpendingDay,
-      averageDailySpending: parseFloat(averageDailySpending.toFixed(2))
-    });
+    res.json(buildDailySpending(expenses, dateRange));
   } catch (error) {
     console.error('Daily spending error:', error);
     res.status(500).json({ error: 'Failed to get daily spending' });

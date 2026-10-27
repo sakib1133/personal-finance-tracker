@@ -169,7 +169,9 @@ export default function Analytics() {
                     <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-4">
                       <div className="app-stat-tile rounded-lg p-3 sm:p-4">
                         <p className="text-xs sm:text-sm mb-1">Highest Spending Day</p>
-                        <p className="text-base sm:text-lg font-bold">{dailySpending.highestSpendingDay.day}</p>
+                        <p className="text-base sm:text-lg font-bold">
+                          {dailySpending.highestSpendingDay.date || dailySpending.highestSpendingDay.day}
+                        </p>
                         <p className="text-xs sm:text-sm">₹{Number(dailySpending?.highestSpendingDay?.amount ?? 0).toFixed(2)}</p>
                       </div>
                       <div className="app-stat-tile rounded-lg p-3 sm:p-4">
