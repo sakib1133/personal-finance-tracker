@@ -1,34 +1,7 @@
 import axios from 'axios';
+import { normalizeResponseData } from '../utils/normalizeResponseData';
 
 const normalizeBaseUrl = (value) => (value || '').replace(/\/+$/, '');
-const normalizeResponseData = (value) => {
-  if (Array.isArray(value)) {
-    return value.map(normalizeResponseData);
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entryValue]) => [key, normalizeResponseData(entryValue)])
-    );
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return value;
-    }
-
-    const normalized = trimmed.replace(/,/g, '');
-    if (!/^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(normalized)) {
-      return value;
-    }
-
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : value;
-  }
-
-  return value;
-};
 
 const API_BASE_URL = import.meta.env.PROD
   ? '/api'

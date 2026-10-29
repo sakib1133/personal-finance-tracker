@@ -9,6 +9,8 @@ import Navbar from '../components/Navbar';
 import BudgetOverview from '../components/BudgetOverview';
 import BudgetAlert from '../components/BudgetAlert';
 import { useToast } from '../context/ToastContext';
+import { fromCents, toCents } from '../utils/money';
+import { calculateBudgetSummaryCents } from '../utils/finance';
 
 export default function Dashboard() {
   const location = useLocation();
@@ -49,12 +51,10 @@ export default function Dashboard() {
       if (showInitialLoading) {
         setLoading(true);
       }
-      console.log('Loading fresh data...');
       const [expensesData, budgetsData] = await Promise.all([getExpenses(), getBudgets()]);
       const sorted = expensesData.sort((a, b) => new Date(b.date) - new Date(a.date));
       setExpenses(sorted);
       setBudgets(budgetsData);
-      console.log('Data loaded successfully:', sorted);
     } catch (error) {
       console.error('Error loading data:', error);
       showError('Failed to load data');
@@ -72,42 +72,35 @@ export default function Dashboard() {
     setEditingExpense(null);
   };
 
-  const getCurrentMonthExpenses = () => {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    return expenses.filter(exp => {
-      const expDate = new Date(exp.date);
-      return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-    });
-  };
-
   const calculateBudgetSummary = () => {
-    const currentMonthExpenses = getCurrentMonthExpenses();
-    const spendingByCategory = {};
+    const {
+      totalBudgetCents,
+      totalSpendingCents,
+      remainingBudgetCents,
+      spendingByCategoryCents
+    } = calculateBudgetSummaryCents(budgets, expenses);
 
-    currentMonthExpenses.forEach(exp => {
-      if (!spendingByCategory[exp.category]) {
-        spendingByCategory[exp.category] = 0;
-      }
-      spendingByCategory[exp.category] += exp.amount;
-    });
-
-    const totalBudget = budgets.reduce((sum, budget) => sum + budget.monthlyBudget, 0);
-    const totalSpending = budgets.reduce((sum, budget) => sum + (spendingByCategory[budget.category] || 0), 0);
-    const remainingBudget = totalBudget - totalSpending;
-
-    return { totalBudget, totalSpending, remainingBudget, spendingByCategory };
+    return {
+      totalBudget: fromCents(totalBudgetCents),
+      totalSpending: fromCents(totalSpendingCents),
+      remainingBudget: fromCents(remainingBudgetCents),
+      spendingByCategoryCents
+    };
   };
 
-  const { totalBudget, totalSpending, remainingBudget, spendingByCategory } = calculateBudgetSummary();
+  const {
+    totalBudget,
+    totalSpending,
+    remainingBudget,
+    spendingByCategoryCents
+  } = calculateBudgetSummary();
 
   const getBudgetAlerts = () => {
     const alerts = [];
     budgets.forEach(budget => {
-      const spent = spendingByCategory[budget.category] || 0;
-      const percentage = budget.monthlyBudget > 0 ? (spent / budget.monthlyBudget) * 100 : 0;
+      const budgetCents = toCents(budget.monthlyBudget);
+      const spentCents = spendingByCategoryCents.get(budget.category) || 0;
+      const percentage = budgetCents > 0 ? (spentCents / budgetCents) * 100 : 0;
       if (percentage >= 80) {
         alerts.push({ category: budget.category, percentage, isOverspent: percentage >= 100 });
       }

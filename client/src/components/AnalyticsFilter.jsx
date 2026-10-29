@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { isDateRangeWithinLimit } from '../utils/dateRange';
+import { getIndiaDateString, isDateRangeWithinLimit } from '../utils/dateRange';
 
 export default function AnalyticsFilter({ onFilterChange }) {
   const [selectedFilter, setSelectedFilter] = useState('Last 30 Days');
@@ -10,32 +10,34 @@ export default function AnalyticsFilter({ onFilterChange }) {
   const filters = ['Last 7 Days', 'Last 30 Days', 'Last 3 Months', 'Last 6 Months', 'Last 12 Months', 'Custom'];
 
   const formatDate = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
   const subtractMonths = (date, months) => {
-    const day = date.getDate();
-    date.setDate(1);
-    date.setMonth(date.getMonth() - months);
-    date.setDate(Math.min(day, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()));
+    const day = date.getUTCDate();
+    date.setUTCDate(1);
+    date.setUTCMonth(date.getUTCMonth() - months);
+    date.setUTCDate(Math.min(
+      day,
+      new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()
+    ));
   };
 
   const handleFilterSelect = (filter) => {
     setSelectedFilter(filter);
 
-    const endDate = new Date();
-    endDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(`${getIndiaDateString()}T00:00:00Z`);
     let startDate = new Date(endDate);
 
     switch (filter) {
       case 'Last 7 Days':
-        startDate.setDate(startDate.getDate() - 6);
+        startDate.setUTCDate(startDate.getUTCDate() - 6);
         break;
       case 'Last 30 Days':
-        startDate.setDate(startDate.getDate() - 29);
+        startDate.setUTCDate(startDate.getUTCDate() - 29);
         break;
       case 'Last 3 Months':
         subtractMonths(startDate, 3);

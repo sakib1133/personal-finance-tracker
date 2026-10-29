@@ -7,6 +7,8 @@ import BudgetAlert from '../components/BudgetAlert';
 import BudgetVsSpendingChart from '../components/BudgetVsSpendingChart';
 import Navbar from '../components/Navbar';
 import { useToast } from '../context/ToastContext';
+import { fromCents, toCents } from '../utils/money';
+import { getCurrentIndiaMonthExpenses, groupExpenseCentsByCategory } from '../utils/finance';
 
 export default function Budgets() {
   const [budgets, setBudgets] = useState([]);
@@ -46,29 +48,8 @@ export default function Budgets() {
     }
   };
 
-  const getCurrentMonthExpenses = () => {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    return expenses.filter(exp => {
-      const expDate = new Date(exp.date);
-      return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
-    });
-  };
-
   const calculateSpendingByCategory = () => {
-    const currentMonthExpenses = getCurrentMonthExpenses();
-    const spendingByCategory = {};
-
-    currentMonthExpenses.forEach(exp => {
-      if (!spendingByCategory[exp.category]) {
-        spendingByCategory[exp.category] = 0;
-      }
-      spendingByCategory[exp.category] += exp.amount;
-    });
-
-    return spendingByCategory;
+    return groupExpenseCentsByCategory(getCurrentIndiaMonthExpenses(expenses));
   };
 
   const getBudgetWithSpending = () => {
@@ -76,10 +57,10 @@ export default function Budgets() {
 
     return budgets.map(budget => ({
       ...budget,
-      spent: spendingByCategory[budget.category] || 0,
-      remaining: budget.monthlyBudget - (spendingByCategory[budget.category] || 0),
-      percentage: budget.monthlyBudget > 0 
-        ? ((spendingByCategory[budget.category] || 0) / budget.monthlyBudget) * 100 
+      spent: fromCents(spendingByCategory.get(budget.category) || 0),
+      remaining: fromCents(toCents(budget.monthlyBudget) - (spendingByCategory.get(budget.category) || 0)),
+      percentage: toCents(budget.monthlyBudget) > 0
+        ? ((spendingByCategory.get(budget.category) || 0) / toCents(budget.monthlyBudget)) * 100
         : 0
     }));
   };

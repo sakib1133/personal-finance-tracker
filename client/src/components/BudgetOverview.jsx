@@ -1,13 +1,12 @@
-const toNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+import { formatCents, toCents } from '../utils/money';
 
 export default function BudgetOverview({ totalBudget, totalSpending, remainingBudget }) {
-  const safeTotalBudget = toNumber(totalBudget);
-  const safeTotalSpending = toNumber(totalSpending);
-  const safeRemainingBudget = toNumber(remainingBudget);
-  const percentageUsed = safeTotalBudget > 0 ? (safeTotalSpending / safeTotalBudget) * 100 : 0;
+  const totalBudgetCents = toCents(totalBudget);
+  const totalSpendingCents = toCents(totalSpending);
+  const remainingBudgetCents = toCents(remainingBudget);
+  const percentageUsed = totalBudgetCents > 0
+    ? (totalSpendingCents / totalBudgetCents) * 100
+    : 0;
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 sm:p-6" style={{ backgroundColor: 'var(--bg-card)' }}>
@@ -18,20 +17,20 @@ export default function BudgetOverview({ totalBudget, totalSpending, remainingBu
       <div className="space-y-3 sm:space-y-4">
         <div className="flex justify-between items-center p-2 sm:p-3 bg-blue-50 rounded-lg">
           <span className="text-xs sm:text-sm font-medium text-blue-800">Total Monthly Budget</span>
-          <span className="text-sm sm:text-lg font-bold text-blue-900">₹{safeTotalBudget.toFixed(2)}</span>
+          <span className="text-sm sm:text-lg font-bold text-blue-900">₹{formatCents(totalBudgetCents)}</span>
         </div>
 
         <div className="flex justify-between items-center p-2 sm:p-3 bg-red-50 rounded-lg">
           <span className="text-xs sm:text-sm font-medium text-red-800">Total Monthly Spending</span>
-          <span className="text-sm sm:text-lg font-bold text-red-900">₹{safeTotalSpending.toFixed(2)}</span>
+          <span className="text-sm sm:text-lg font-bold text-red-900">₹{formatCents(totalSpendingCents)}</span>
         </div>
 
-        <div className={`flex justify-between items-center p-2 sm:p-3 rounded-lg ${remainingBudget >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-          <span className={`text-xs sm:text-sm font-medium ${remainingBudget >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+        <div className={`flex justify-between items-center p-2 sm:p-3 rounded-lg ${remainingBudgetCents >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+          <span className={`text-xs sm:text-sm font-medium ${remainingBudgetCents >= 0 ? 'text-green-800' : 'text-red-800'}`}>
             Remaining Budget
           </span>
-          <span className={`text-sm sm:text-lg font-bold ${safeRemainingBudget >= 0 ? 'text-green-900' : 'text-red-900'}`}>
-            ₹{safeRemainingBudget.toFixed(2)}
+          <span className={`text-sm sm:text-lg font-bold ${remainingBudgetCents >= 0 ? 'text-green-900' : 'text-red-900'}`}>
+            ₹{formatCents(remainingBudgetCents)}
           </span>
         </div>
 

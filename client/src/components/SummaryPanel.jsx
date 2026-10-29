@@ -1,38 +1,27 @@
-const toNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+import { addCents, formatCents, toCents } from '../utils/money';
+import { getCurrentIndiaMonthExpenses, groupExpenseCentsByCategory } from '../utils/finance';
 
 export default function SummaryPanel({ expenses }) {
   const calculateTotals = () => {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const thisMonthExpenses = expenses.filter(expense => {
-      const expenseDate = new Date(expense.date);
-      return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
-    });
-
-    const totalThisMonth = thisMonthExpenses.reduce((sum, exp) => sum + toNumber(exp.amount), 0);
-
-    const categoryTotals = expenses.reduce((acc, exp) => {
-      acc[exp.category] = (acc[exp.category] || 0) + toNumber(exp.amount);
-      return acc;
-    }, {});
+    const currentMonthExpenses = getCurrentIndiaMonthExpenses(expenses);
+    const totalThisMonthCents = currentMonthExpenses.reduce(
+      (sum, expense) => addCents(sum, toCents(expense.amount)),
+      0
+    );
+    const categoryTotalsCents = groupExpenseCentsByCategory(expenses);
 
     const highestExpense = expenses.length > 0 
-      ? expenses.reduce((max, exp) => toNumber(exp.amount) > toNumber(max.amount) ? exp : max, expenses[0])
+      ? expenses.reduce((max, expense) => toCents(expense.amount) > toCents(max.amount) ? expense : max, expenses[0])
       : null;
 
     return {
-      totalThisMonth,
-      categoryTotals,
+      totalThisMonthCents,
+      categoryTotalsCents,
       highestExpense
     };
   };
 
-  const { totalThisMonth, categoryTotals, highestExpense } = calculateTotals();
+  const { totalThisMonthCents, categoryTotalsCents, highestExpense } = calculateTotals();
 
   return (
     <div className="shadow p-4 sm:p-6 mb-6 border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)', borderRadius: '14px' }}>
@@ -42,14 +31,14 @@ export default function SummaryPanel({ expenses }) {
         <div className="p-3 sm:p-4 rounded border" style={{ backgroundColor: 'var(--primary)', borderColor: 'var(--primary)' }}>
           <p className="text-xs sm:text-sm mb-1" style={{ color: '#cbd5e1' }}>Total This Month</p>
           <p className="text-xl sm:text-2xl font-bold" style={{ color: '#ffffff' }}>
-            ₹{totalThisMonth.toFixed(2)}
+            ₹{formatCents(totalThisMonthCents)}
           </p>
         </div>
 
         <div className="p-3 sm:p-4 rounded border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
           <p className="text-xs sm:text-sm mb-1" style={{ color: 'var(--text-muted)' }}>Highest Single Expense</p>
           <p className="text-xl sm:text-2xl font-bold" style={{ color: 'var(--primary)' }}>
-            {highestExpense ? `₹${highestExpense.amount.toFixed(2)}` : '₹0.00'}
+            {highestExpense ? `₹${formatCents(toCents(highestExpense.amount))}` : '₹0.00'}
           </p>
           {highestExpense && (
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
@@ -69,11 +58,11 @@ export default function SummaryPanel({ expenses }) {
       <div className="mt-4">
         <h3 className="text-base sm:text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Spending by Category</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {Object.entries(categoryTotals).map(([category, total]) => (
+          {[...categoryTotalsCents].map(([category, totalCents]) => (
             <div key={category} className="p-2 sm:p-3 rounded border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}>
               <p className="text-xs sm:text-sm" style={{ color: 'var(--text-muted)' }}>{category}</p>
               <p className="text-sm sm:text-lg font-semibold" style={{ color: 'var(--primary)' }}>
-                ₹{total.toFixed(2)}
+                ₹{formatCents(totalCents)}
               </p>
             </div>
           ))}

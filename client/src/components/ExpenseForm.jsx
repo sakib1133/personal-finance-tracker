@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createExpense, updateExpense } from '../api/expenses';
+import { getIndiaDateString } from '../utils/dateRange';
+import { MAX_FINANCIAL_AMOUNT, parsePositiveAmount } from '../utils/money';
 
 const CATEGORIES = ['Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
 
@@ -13,6 +15,7 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState('');
+  const idempotencyRequest = useRef(null);
 
   useEffect(() => {
     if (editingExpense) {
@@ -26,7 +29,7 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
       setFormData({
         amount: '',
         category: '',
-        date: new Date().toISOString().split('T')[0],
+        date: getIndiaDateString(),
         note: ''
       });
     }
@@ -35,8 +38,8 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
   const validate = () => {
     const newErrors = {};
     
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      newErrors.amount = 'Amount must be a positive number';
+    if (parsePositiveAmount(formData.amount) === null) {
+      newErrors.amount = `Enter a positive amount up to ₹${MAX_FINANCIAL_AMOUNT.toFixed(2)} with no more than two decimal places`;
     }
     
     if (!formData.category) {
@@ -63,13 +66,24 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
       if (editingExpense) {
         await updateExpense(editingExpense.id, formData);
       } else {
-        await createExpense(formData);
+        const requestFingerprint = JSON.stringify(formData);
+        if (idempotencyRequest.current?.fingerprint !== requestFingerprint) {
+          if (!globalThis.crypto?.randomUUID) {
+            throw new Error('Secure transaction submission is unavailable in this browser.');
+          }
+          idempotencyRequest.current = {
+            fingerprint: requestFingerprint,
+            key: globalThis.crypto.randomUUID()
+          };
+        }
+        await createExpense(formData, idempotencyRequest.current.key);
       }
       onSubmit();
+      idempotencyRequest.current = null;
       setFormData({
         amount: '',
         category: '',
-        date: new Date().toISOString().split('T')[0],
+        date: getIndiaDateString(),
         note: ''
       });
       setErrors({});
@@ -100,7 +114,8 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
           <input
             type="number"
             step="0.01"
-            min="0"
+            min="0.01"
+            max={MAX_FINANCIAL_AMOUNT}
             value={formData.amount}
             onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
             className={`w-full px-3 py-2 border focus:outline-none text-sm ${
@@ -155,6 +170,7 @@ export default function ExpenseForm({ editingExpense, onSubmit, onCancel }) {
             onChange={(e) => setFormData({ ...formData, note: e.target.value })}
             className="w-full px-3 py-2 border focus:outline-none text-sm" style={{ backgroundColor: 'var(--bg-input)', borderColor: 'var(--border-light)', color: 'var(--text-primary)', borderRadius: '8px' }}
             rows="2"
+            maxLength={2000}
           />
         </div>
 

@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const { createDatabasePoolConfig } = require('./databasePoolConfig');
+const { createExpenseIdempotently } = require('./expenseIdempotency');
 require('dotenv').config();
 
 let pool = null;
@@ -33,6 +34,10 @@ async function query(text, params = []) {
 async function queryOne(text, params = []) {
   const rows = await query(text, params);
   return rows[0];
+}
+
+async function createIdempotentExpense(expenseDetails) {
+  return createExpenseIdempotently(getDb(), expenseDetails);
 }
 
 async function initDatabase() {
@@ -85,6 +90,17 @@ async function initDatabase() {
   `);
 
   await database.query(`
+    CREATE TABLE IF NOT EXISTS expense_idempotency (
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      idempotency_key UUID NOT NULL,
+      request_hash CHAR(64) NOT NULL,
+      response JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, idempotency_key)
+    )
+  `);
+
+  await database.query(`
     CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON expenses(user_id)
   `);
 
@@ -115,6 +131,7 @@ module.exports = {
   getDb,
   query,
   queryOne,
+  createIdempotentExpense,
   initDatabase,
   migrateFromJSON,
   closeDatabase

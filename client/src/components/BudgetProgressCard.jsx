@@ -1,13 +1,10 @@
-const toNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+import { formatCents, toCents } from '../utils/money';
 
 export default function BudgetProgressCard({ category, budget, spent, remaining, percentage }) {
-  const safeBudget = toNumber(budget);
-  const safeSpent = toNumber(spent);
-  const safeRemaining = toNumber(remaining);
-  const safePercentage = toNumber(percentage);
+  const budgetCents = toCents(budget);
+  const spentCents = toCents(spent);
+  const remainingCents = toCents(remaining);
+  const safePercentage = percentage;
 
   const getProgressColor = () => {
     if (safePercentage <= 70) return 'bg-green-500';
@@ -42,19 +39,19 @@ export default function BudgetProgressCard({ category, budget, spent, remaining,
         <div className="flex justify-between text-xs sm:text-sm">
           <span style={{ color: 'var(--text-secondary)' }}>Budget:</span>
           <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
-            ₹{safeBudget.toFixed(2)}
+            ₹{formatCents(budgetCents)}
           </span>
         </div>
         <div className="flex justify-between text-xs sm:text-sm">
           <span style={{ color: 'var(--text-secondary)' }}>Spent:</span>
           <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
-            ₹{safeSpent.toFixed(2)}
+            ₹{formatCents(spentCents)}
           </span>
         </div>
         <div className="flex justify-between text-xs sm:text-sm">
           <span style={{ color: 'var(--text-secondary)' }}>Remaining:</span>
-          <span className={`font-medium ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            ₹{safeRemaining.toFixed(2)}
+          <span className={`font-medium ${remainingCents >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            ₹{formatCents(remainingCents)}
           </span>
         </div>
       </div>

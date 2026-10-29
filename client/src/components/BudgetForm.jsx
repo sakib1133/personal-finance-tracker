@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MAX_FINANCIAL_AMOUNT, parsePositiveAmount } from '../utils/money';
 
 const CATEGORIES = ['Food', 'Transport', 'Bills', 'Entertainment', 'Other'];
 
@@ -17,8 +18,8 @@ export default function BudgetForm({ onSubmit, onCancel, editingBudget }) {
       return;
     }
 
-    if (isNaN(monthlyBudget) || monthlyBudget <= 0) {
-      setError('Monthly budget must be a positive number');
+    if (parsePositiveAmount(monthlyBudget) === null) {
+      setError(`Enter a positive budget up to ₹${MAX_FINANCIAL_AMOUNT.toFixed(2)} with no more than two decimal places`);
       return;
     }
 
@@ -26,7 +27,7 @@ export default function BudgetForm({ onSubmit, onCancel, editingBudget }) {
     try {
       await onSubmit({
         category,
-        monthlyBudget: parseFloat(monthlyBudget)
+        monthlyBudget
       });
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to save budget');
@@ -80,7 +81,8 @@ export default function BudgetForm({ onSubmit, onCancel, editingBudget }) {
             style={{ backgroundColor: 'var(--bg-main)', color: 'var(--text-primary)', borderColor: 'var(--border-color)' }}
             placeholder="Enter monthly budget"
             step="0.01"
-            min="0"
+            min="0.01"
+            max={MAX_FINANCIAL_AMOUNT}
             required
           />
         </div>

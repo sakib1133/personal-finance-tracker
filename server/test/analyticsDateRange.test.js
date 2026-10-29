@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { isDailySpendingRangeWithinLimit } = require('../analyticsDateRange');
+const {
+  getIndiaDateString,
+  getIndiaMonthStartDate,
+  isDailySpendingRangeWithinLimit
+} = require('../analyticsDateRange');
 
 test('allows a one-day daily-spending range', () => {
   assert.equal(
@@ -30,4 +34,14 @@ test('rejects a daily-spending range longer than 367 days', () => {
     }),
     false
   );
+});
+
+test('reporting date and month boundaries are based on Asia/Kolkata', () => {
+  const beforeMidnight = new Date('2026-09-30T18:29:00.000Z');
+  const indiaMidnight = new Date('2026-09-30T18:30:00.000Z');
+
+  assert.equal(getIndiaDateString(beforeMidnight), '2026-09-30');
+  assert.equal(getIndiaDateString(indiaMidnight), '2026-10-01');
+  assert.equal(getIndiaMonthStartDate(indiaMidnight), '2026-10-01');
+  assert.equal(getIndiaMonthStartDate(indiaMidnight, 1), '2026-11-01');
 });

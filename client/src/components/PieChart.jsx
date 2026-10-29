@@ -1,17 +1,20 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { addCents, fromCents, toCents } from '../utils/money';
 
 const COLORS = ['#334155', '#64748b', '#94a3b8', '#cbd5e1', '#e2e8f0'];
 
 export default function ExpensePieChart({ expenses }) {
-  const categoryData = expenses.reduce((acc, expense) => {
-    const existing = acc.find(item => item.name === expense.category);
-    if (existing) {
-      existing.value += expense.amount;
-    } else {
-      acc.push({ name: expense.category, value: expense.amount });
-    }
-    return acc;
-  }, []);
+  const categoryTotals = new Map();
+  expenses.forEach((expense) => {
+    categoryTotals.set(
+      expense.category,
+      addCents(categoryTotals.get(expense.category) || 0, toCents(expense.amount))
+    );
+  });
+  const categoryData = [...categoryTotals].map(([name, cents]) => ({
+    name,
+    value: fromCents(cents)
+  }));
 
   if (categoryData.length === 0) {
     return (

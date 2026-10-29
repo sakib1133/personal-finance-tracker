@@ -30,6 +30,7 @@ const usersByEmail = new Map([[user.email, user]]);
 const googleUsersCreated = [];
 let expenseSelectCount = 0;
 let expenseInsertCount = 0;
+let lastExpenseDeleteQuery;
 
 database.query = async (text, values = []) => {
   if (text.includes('INSERT INTO auth_sessions')) {
@@ -48,6 +49,10 @@ database.query = async (text, values = []) => {
   }
   if (text.includes('DELETE FROM auth_sessions')) {
     sessions.delete(values[0]);
+    return [];
+  }
+  if (text.startsWith('DELETE FROM expenses')) {
+    lastExpenseDeleteQuery = { text, values };
     return [];
   }
   if (text.includes('INSERT INTO expenses')) {
@@ -284,14 +289,14 @@ test('a user cannot delete another user’s expense by changing its ID', async (
     body: JSON.stringify({ email: user.email, password: 'correct-password' })
   });
   const cookiePair = loginResponse.headers.getSetCookie()[0].split(';', 1)[0];
-  const beforeSelectCount = expenseSelectCount;
   const response = await fetch(`${baseUrl}/expenses/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb`, {
     method: 'DELETE',
     headers: { Cookie: cookiePair }
   });
 
-  assert.equal(response.status, 403);
-  assert.equal(expenseSelectCount, beforeSelectCount + 1);
+  assert.equal(response.status, 404);
+  assert.match(lastExpenseDeleteQuery.text, /WHERE id = \$1 AND user_id = \$2/);
+  assert.equal(lastExpenseDeleteQuery.values[1], user.id);
 });
 
 test('malformed expense amounts and oversized daily analytics ranges are rejected before data queries', async () => {

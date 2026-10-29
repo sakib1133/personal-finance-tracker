@@ -1,15 +1,14 @@
-const toNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+import { formatCents, toCents } from '../utils/money';
 
 export default function MonthlyComparison({ currentPeriod, previousPeriod }) {
-  const safeCurrentPeriod = toNumber(currentPeriod);
-  const safePreviousPeriod = toNumber(previousPeriod);
-  const difference = safeCurrentPeriod - safePreviousPeriod;
-  const percentage = safePreviousPeriod > 0 ? ((difference / safePreviousPeriod) * 100).toFixed(1) : null;
-  const isIncrease = difference > 0;
-  const isDecrease = difference < 0;
+  const currentPeriodCents = toCents(currentPeriod);
+  const previousPeriodCents = toCents(previousPeriod);
+  const differenceCents = currentPeriodCents - previousPeriodCents;
+  const percentage = previousPeriodCents > 0
+    ? ((differenceCents / previousPeriodCents) * 100).toFixed(1)
+    : null;
+  const isIncrease = differenceCents > 0;
+  const isDecrease = differenceCents < 0;
   const changeLabel = isIncrease ? 'Increase' : isDecrease ? 'Decrease' : 'No change';
   const differenceColor = isIncrease
     ? 'text-red-500'
@@ -35,19 +34,19 @@ export default function MonthlyComparison({ currentPeriod, previousPeriod }) {
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <span className="text-gray-600">Selected Period</span>
-          <span className="text-xl font-bold text-gray-800">₹{safeCurrentPeriod.toFixed(2)}</span>
+          <span className="text-xl font-bold text-gray-800">₹{formatCents(currentPeriodCents)}</span>
         </div>
         
         <div className="flex justify-between items-center">
           <span className="text-gray-600">Previous Period</span>
-          <span className="text-xl font-bold text-gray-800">₹{safePreviousPeriod.toFixed(2)}</span>
+          <span className="text-xl font-bold text-gray-800">₹{formatCents(previousPeriodCents)}</span>
         </div>
         
         <div className="border-t pt-4">
           <div className="flex justify-between items-center">
             <span className="text-gray-600">Difference</span>
             <span className={`text-xl font-bold ${differenceColor}`}>
-              {isIncrease ? '+' : ''}₹{difference.toFixed(2)}
+              {isIncrease ? '+' : ''}₹{formatCents(differenceCents)}
             </span>
           </div>
           
@@ -58,7 +57,7 @@ export default function MonthlyComparison({ currentPeriod, previousPeriod }) {
                 {changeIndicator} {percentage === null ? (isIncrease ? 'N/A' : '0.0%') : `${Math.abs(percentage)}%`}
               </span>
               <span className={`text-sm px-2 py-1 rounded-full ${changeBadgeColor}`}>
-                {safePreviousPeriod === 0 && isIncrease ? 'New spending' : changeLabel}
+                {previousPeriodCents === 0 && isIncrease ? 'New spending' : changeLabel}
               </span>
             </div>
           </div>

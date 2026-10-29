@@ -51,7 +51,19 @@ test('email normalization trims and lowercases addresses', () => {
 test('expense amount parsing accepts valid decimals and rejects malformed values', () => {
   assert.equal(parsePositiveAmount('12.30'), 12.3);
   assert.equal(parsePositiveAmount(12), 12);
-  for (const invalid of ['0', '-1', '1.234', '12junk', '1e3', Infinity, null]) {
+  assert.equal(parsePositiveAmount('99999999.99'), 99999999.99);
+  for (const invalid of [
+    '0',
+    '-1',
+    '1.234',
+    '12junk',
+    '1e3',
+    '.5',
+    '01',
+    '100000000',
+    Infinity,
+    null
+  ]) {
     assert.equal(parsePositiveAmount(invalid), null);
   }
 });

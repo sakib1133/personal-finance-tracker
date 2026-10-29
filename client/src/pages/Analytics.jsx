@@ -15,17 +15,18 @@ import MonthlyComparison from '../components/MonthlyComparison';
 import TopSpendingCategories from '../components/TopSpendingCategories';
 import SpendingStatistics from '../components/SpendingStatistics';
 import AnalyticsFilter from '../components/AnalyticsFilter';
+import { getIndiaDateString } from '../utils/dateRange';
+import { formatCents, toCents } from '../utils/money';
 
 const getDefaultDateRange = () => {
-  const endDate = new Date();
-  endDate.setHours(0, 0, 0, 0);
+  const endDate = new Date(`${getIndiaDateString()}T00:00:00Z`);
   const startDate = new Date(endDate);
-  startDate.setDate(startDate.getDate() - 29);
+  startDate.setUTCDate(startDate.getUTCDate() - 29);
 
   const formatDate = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
@@ -172,11 +173,11 @@ export default function Analytics() {
                         <p className="text-base sm:text-lg font-bold">
                           {dailySpending.highestSpendingDay.date || dailySpending.highestSpendingDay.day}
                         </p>
-                        <p className="text-xs sm:text-sm">₹{Number(dailySpending?.highestSpendingDay?.amount ?? 0).toFixed(2)}</p>
+                        <p className="text-xs sm:text-sm">₹{formatCents(toCents(dailySpending.highestSpendingDay.amount))}</p>
                       </div>
                       <div className="app-stat-tile rounded-lg p-3 sm:p-4">
                         <p className="text-xs sm:text-sm mb-1">Average Daily Spending</p>
-                        <p className="text-base sm:text-lg font-bold">₹{Number(dailySpending?.averageDailySpending ?? 0).toFixed(2)}</p>
+                        <p className="text-base sm:text-lg font-bold">₹{formatCents(toCents(dailySpending.averageDailySpending))}</p>
                       </div>
                     </div>
                   )}

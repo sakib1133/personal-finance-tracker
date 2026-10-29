@@ -3,11 +3,22 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
+const { createHash } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
-const { query, queryOne, initDatabase, migrateFromJSON } = require('./db');
+const {
+  query,
+  queryOne,
+  initDatabase,
+  migrateFromJSON,
+  createIdempotentExpense
+} = require('./db');
 const { normalizeResponseData } = require('./normalizeData');
-const { isDailySpendingRangeWithinLimit } = require('./analyticsDateRange');
+const {
+  getIndiaDateString,
+  getIndiaMonthStartDate,
+  isDailySpendingRangeWithinLimit
+} = require('./analyticsDateRange');
 const {
   buildCategoryBreakdown,
   buildDailySpending,
@@ -16,6 +27,8 @@ const {
 } = require('./analyticsCalculations');
 const { normalizeEmail } = require('./email');
 const { parsePositiveAmount } = require('./expenseValidation');
+const { toCents } = require('./analyticsCalculations');
+const { IdempotencyConflictError } = require('./expenseIdempotency');
 const { SESSION_LIFETIME_MS, signSessionToken, verifySessionToken } = require('./authTokens');
 const { getSessionCookieName, getSessionCookieOptions, readCookie } = require('./sessionCookie');
 
@@ -71,8 +84,7 @@ const IS_PRODUCTION = NODE_ENV === 'production';
 const SESSION_COOKIE_NAME = getSessionCookieName(IS_PRODUCTION);
 const SESSION_COOKIE_OPTIONS = getSessionCookieOptions(IS_PRODUCTION);
 const toNumber = (value) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
+  return toCents(value) / 100;
 };
 
 if (!JWT_SECRET || Buffer.byteLength(JWT_SECRET, 'utf8') < 32) {
@@ -113,7 +125,7 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Cache-Control', 'Pragma', 'Expires']
+  allowedHeaders: ['Content-Type', 'Cache-Control', 'Pragma', 'Expires', 'Idempotency-Key']
 };
 
 app.use(cors(corsOptions));
@@ -524,11 +536,7 @@ const isValidISODate = (dateValue) => {
 };
 
 const isFutureDate = (dateValue) => {
-  const d = new Date(dateValue + 'T00:00:00Z');
-  const now = new Date();
-  // Compare only by date (UTC)
-  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  return d.getTime() > todayUTC.getTime();
+  return dateValue > getIndiaDateString();
 };
 
 const getAnalyticsDateRange = (req, res) => {
@@ -560,17 +568,6 @@ const getAnalyticsExpenses = (userId, dateRange) => {
     'SELECT * FROM expenses WHERE user_id = $1 AND date >= $2 AND date <= $3',
     [userId, dateRange.startDate, dateRange.endDate]
   );
-};
-
-const getMonthStartDate = (date, monthOffset = 0) => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit'
-  }).formatToParts(date);
-  const year = Number(parts.find((part) => part.type === 'year').value);
-  const month = Number(parts.find((part) => part.type === 'month').value);
-  return new Date(Date.UTC(year, month - 1 + monthOffset, 1)).toISOString().slice(0, 10);
 };
 
 const getPreviousDateRange = ({ startDate, endDate }) => {
@@ -614,15 +611,38 @@ app.post('/expenses', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Date cannot be in the future' });
     }
 
-    const expenseId = uuidv4();
-    const createdAt = new Date().toISOString();
+    const idempotencyKey = req.get('Idempotency-Key');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey || '')) {
+      return res.status(400).json({ error: 'A valid Idempotency-Key UUID is required' });
+    }
 
-    const rows = await query(
-      'INSERT INTO expenses (id, user_id, amount, category, date, note, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [expenseId, req.user.id, parsedAmount, category, date, note || '', createdAt]
-    );
+    const normalizedNote = note || '';
+    const requestHash = createHash('sha256')
+      .update(JSON.stringify([parsedAmount.toFixed(2), category, date, normalizedNote]))
+      .digest('hex');
+    const expense = {
+      id: uuidv4(),
+      amount: parsedAmount,
+      category,
+      date,
+      note: normalizedNote,
+      createdAt: new Date().toISOString()
+    };
 
-    res.status(201).json(rows[0]);
+    try {
+      const result = await createIdempotentExpense({
+        userId: req.user.id,
+        key: idempotencyKey,
+        requestHash,
+        expense
+      });
+      res.status(201).json(result.expense);
+    } catch (error) {
+      if (error instanceof IdempotencyConflictError || error.statusCode === 409) {
+        return res.status(409).json({ error: 'This Idempotency-Key was already used for a different expense' });
+      }
+      throw error;
+    }
   } catch (error) {
     res.status(500).json({ error: 'Failed to create expense' });
   }
@@ -633,14 +653,13 @@ app.put('/expenses/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { amount, category, date, note } = req.body;
 
-    const expense = await queryOne('SELECT * FROM expenses WHERE id = $1', [id]);
+    const expense = await queryOne(
+      'SELECT * FROM expenses WHERE id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
 
     if (!expense) {
       return res.status(404).json({ error: 'Expense not found' });
-    }
-
-    if (expense.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
     }
 
     const updates = [];
@@ -691,8 +710,14 @@ app.put('/expenses/:id', authenticateToken, async (req, res) => {
       return res.json(expense);
     }
 
-    values.push(id);
-    const rows = await query(`UPDATE expenses SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`, values);
+    values.push(id, req.user.id);
+    const rows = await query(
+      `UPDATE expenses SET ${updates.join(', ')} WHERE id = $${values.length - 1} AND user_id = $${values.length} RETURNING *`,
+      values
+    );
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Expense not found' });
+    }
 
     res.json(rows[0]);
   } catch (error) {
@@ -704,17 +729,13 @@ app.delete('/expenses/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const expense = await queryOne('SELECT * FROM expenses WHERE id = $1', [id]);
-
-    if (!expense) {
+    const deleted = await query(
+      'DELETE FROM expenses WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, req.user.id]
+    );
+    if (deleted.length === 0) {
       return res.status(404).json({ error: 'Expense not found' });
     }
-
-    if (expense.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    await query('DELETE FROM expenses WHERE id = $1', [id]);
 
     res.json({ message: 'Expense deleted successfully' });
   } catch (error) {
@@ -760,7 +781,7 @@ app.post('/budgets', authenticateToken, async (req, res) => {
 
     const existingBudget = await queryOne('SELECT id FROM budgets WHERE user_id = $1 AND category = $2', [req.user.id, category]);
     if (existingBudget) {
-      return res.status(400).json({ error: 'Budget already exists for this category' });
+      return res.status(409).json({ error: 'Budget already exists for this category' });
     }
 
     const rows = await query(
@@ -780,6 +801,9 @@ app.post('/budgets', authenticateToken, async (req, res) => {
 
     res.status(201).json(transformedBudget);
   } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Budget already exists for this category' });
+    }
     res.status(500).json({ error: 'Failed to create budget' });
   }
 });
@@ -789,14 +813,13 @@ app.put('/budgets/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { category, monthlyBudget } = req.body;
 
-    const budget = await queryOne('SELECT * FROM budgets WHERE id = $1', [id]);
+    const budget = await queryOne(
+      'SELECT * FROM budgets WHERE id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
 
     if (!budget) {
       return res.status(404).json({ error: 'Budget not found' });
-    }
-
-    if (budget.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
     }
 
     if (category !== undefined) {
@@ -807,7 +830,7 @@ app.put('/budgets/:id', authenticateToken, async (req, res) => {
 
       const existingBudget = await queryOne('SELECT id FROM budgets WHERE user_id = $1 AND category = $2 AND id != $3', [req.user.id, category, id]);
       if (existingBudget) {
-        return res.status(400).json({ error: 'Budget already exists for this category' });
+        return res.status(409).json({ error: 'Budget already exists for this category' });
       }
     }
 
@@ -835,8 +858,14 @@ app.put('/budgets/:id', authenticateToken, async (req, res) => {
     updates.push('updated_at = $' + (values.length + 1));
     values.push(new Date().toISOString());
 
-    values.push(id);
-    const rows = await query(`UPDATE budgets SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING *`, values);
+    values.push(id, req.user.id);
+    const rows = await query(
+      `UPDATE budgets SET ${updates.join(', ')} WHERE id = $${values.length - 1} AND user_id = $${values.length} RETURNING *`,
+      values
+    );
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Budget not found' });
+    }
     const updatedBudget = rows[0];
 
     const transformedBudget = {
@@ -850,6 +879,9 @@ app.put('/budgets/:id', authenticateToken, async (req, res) => {
 
     res.json(transformedBudget);
   } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Budget already exists for this category' });
+    }
     res.status(500).json({ error: 'Failed to update budget' });
   }
 });
@@ -858,17 +890,13 @@ app.delete('/budgets/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const budget = await queryOne('SELECT * FROM budgets WHERE id = $1', [id]);
-
-    if (!budget) {
+    const deleted = await query(
+      'DELETE FROM budgets WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, req.user.id]
+    );
+    if (deleted.length === 0) {
       return res.status(404).json({ error: 'Budget not found' });
     }
-
-    if (budget.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    await query('DELETE FROM budgets WHERE id = $1', [id]);
 
     res.json({ message: 'Budget deleted successfully' });
   } catch (error) {
@@ -886,9 +914,9 @@ app.get('/analytics/summary', authenticateToken, async (req, res) => {
     if (dateRange === undefined) return;
 
     const now = new Date();
-    const currentMonthStart = getMonthStartDate(now);
-    const nextMonthStart = getMonthStartDate(now, 1);
-    const previousMonthStart = getMonthStartDate(now, -1);
+    const currentMonthStart = getIndiaMonthStartDate(now);
+    const nextMonthStart = getIndiaMonthStartDate(now, 1);
+    const previousMonthStart = getIndiaMonthStartDate(now, -1);
     const previousDateRange = dateRange ? getPreviousDateRange(dateRange) : null;
     const [expenses, monthSpending, previousPeriodSpending] = await Promise.all([
       getAnalyticsExpenses(req.user.id, dateRange),

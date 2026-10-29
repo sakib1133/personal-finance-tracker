@@ -1,3 +1,5 @@
+import { formatCents, toCents } from '../utils/money';
+
 export default function TopSpendingCategories({ data = [] }) {
   const topCategories = Array.isArray(data) ? data.slice(0, 5) : [];
 
@@ -12,9 +14,7 @@ export default function TopSpendingCategories({ data = [] }) {
     );
   }
 
-  const maxAmount = Math.max(
-    ...topCategories.map(cat => Number(cat.amount) || 0)
-  );
+  const maxAmountCents = Math.max(...topCategories.map((category) => toCents(category.amount)));
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6">
@@ -24,8 +24,8 @@ export default function TopSpendingCategories({ data = [] }) {
 
       <div className="space-y-4">
         {topCategories.map((category, index) => {
-          const amount = Number(category.amount) || 0;
-          const percentage = Number(category.percentage) || 0;
+          const amountCents = toCents(category.amount);
+          const percentage = category.percentage;
 
           return (
             <div key={category.category}>
@@ -38,7 +38,7 @@ export default function TopSpendingCategories({ data = [] }) {
 
                 <div className="text-right">
                   <span className="text-sm font-bold text-gray-800">
-                    ₹{amount.toFixed(2)}
+                    ₹{formatCents(amountCents)}
                   </span>
 
                   <span className="text-xs text-gray-500 ml-2">
@@ -51,7 +51,7 @@ export default function TopSpendingCategories({ data = [] }) {
                 <div
                   className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
                   style={{
-                    width: `${maxAmount > 0 ? (amount / maxAmount) * 100 : 0}%`
+                    width: `${maxAmountCents > 0 ? (amountCents / maxAmountCents) * 100 : 0}%`
                   }}
                 />
               </div>

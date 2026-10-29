@@ -5,8 +5,10 @@ export const getExpenses = async () => {
   return response.data;
 };
 
-export const createExpense = async (expense) => {
-  const response = await api.post('/expenses', expense);
+export const createExpense = async (expense, idempotencyKey) => {
+  const response = await api.post('/expenses', expense, {
+    headers: { 'Idempotency-Key': idempotencyKey }
+  });
   return response.data;
 };
 

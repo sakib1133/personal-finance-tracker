@@ -1,9 +1,5 @@
 import { deleteExpense } from '../api/expenses';
-
-const toNumber = (value) => {
-const parsed = Number(value);
-return Number.isFinite(parsed) ? parsed : 0;
-};
+import { formatCents, toCents } from '../utils/money';
 
 export default function ExpenseTable({ expenses, onEdit, onDelete, onDeleteError }) {
 const handleDelete = async (id) => {
@@ -202,7 +198,7 @@ Date </th>
               className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-right font-medium"
               style={{ color: 'var(--primary)', fontWeight: 700 }}
             >
-              ₹{toNumber(expense.amount).toFixed(2)}
+              ₹{formatCents(toCents(expense.amount))}
             </td>
 
             <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -269,7 +265,7 @@ Date </th>
             className="text-lg font-bold"
             style={{ color: 'var(--primary)' }}
           >
-            ₹{toNumber(expense.amount).toFixed(2)}
+            ₹{formatCents(toCents(expense.amount))}
           </p>
         </div>
 

@@ -20,9 +20,28 @@ function normalizeValue(value) {
   return Number.isFinite(parsed) ? parsed : value;
 }
 
-function normalizeResponseData(data) {
+const MONEY_FIELDS = new Set([
+  'amount',
+  'monthly_budget',
+  'monthlyBudget',
+  'current_month_spending',
+  'previous_month_spending',
+  'total',
+  'totalExpenses',
+  'averageExpenseAmount',
+  'highestSingleExpense',
+  'lowestExpense',
+  'currentMonthSpending',
+  'previousMonthSpending',
+  'selectedPeriodSpending',
+  'previousPeriodSpending',
+  'totalSpending',
+  'averageDailySpending'
+]);
+
+function normalizeResponseData(data, fieldName) {
   if (Array.isArray(data)) {
-    return data.map(normalizeResponseData);
+    return data.map((value) => normalizeResponseData(value));
   }
 
   // IMPORTANT FIX
@@ -34,12 +53,12 @@ function normalizeResponseData(data) {
     return Object.fromEntries(
       Object.entries(data).map(([key, value]) => [
         key,
-        normalizeResponseData(value)
+        normalizeResponseData(value, key)
       ])
     );
   }
 
-  return normalizeValue(data);
+  return MONEY_FIELDS.has(fieldName) ? normalizeValue(data) : data;
 }
 
 function normalizeExpense(expense) {

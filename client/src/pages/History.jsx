@@ -6,6 +6,7 @@ import ExportButton from '../components/ExportButton';
 import FilterBar from '../components/FilterBar';
 import Navbar from '../components/Navbar';
 import { useToast } from '../context/ToastContext';
+import { getIndiaMonthKey } from '../utils/dateRange';
 
 const DEFAULT_FILTERS = {
   category: 'All',
@@ -22,21 +23,18 @@ const applyFilters = (expenses, filters) => {
   }
 
   if (filters.dateRange === 'This Month' || filters.dateRange === 'Last Month') {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    const monthOffset = filters.dateRange === 'Last Month' ? -1 : 0;
-    const targetMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const [year, month] = getIndiaMonthKey().split('-').map(Number);
+    const targetMonth = new Date(Date.UTC(
+      year,
+      month - 1 + (filters.dateRange === 'Last Month' ? -1 : 0),
+      1
+    )).toISOString().slice(0, 7);
 
-    filtered = filtered.filter((expense) => {
-      const expenseDate = new Date(expense.date);
-      return expenseDate.getMonth() === targetMonth.getMonth() &&
-        expenseDate.getFullYear() === targetMonth.getFullYear();
-    });
+    filtered = filtered.filter((expense) => expense.date.slice(0, 7) === targetMonth);
   } else if (filters.dateRange === 'Custom' && filters.startDate && filters.endDate) {
-    filtered = filtered.filter((expense) => {
-      const expenseDate = new Date(expense.date);
-      return expenseDate >= new Date(filters.startDate) &&
-        expenseDate <= new Date(filters.endDate);
-    });
+    filtered = filtered.filter((expense) =>
+      expense.date >= filters.startDate && expense.date <= filters.endDate
+    );
   }
 
   return filtered;
